@@ -1,0 +1,109 @@
+body{
+    margin: 0;
+}
+.header{
+    z-index: 100;
+    width: 100%;
+    height: 70px;
+    position: fixed;
+    border-color: rgb(249, 203, 148);
+    background-color: bisque;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+}
+.logo_section{
+    width: 100px;
+    align-items: center;
+    display: flex;
+}
+.FlameoLogo{
+    width: 150px;
+    height: 70px;
+}
+.FlameoLogo:hover{
+    cursor: pointer;
+}
+.middle_section{
+    align-items: center;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+}
+.logo-item{
+    padding: 10px;
+    height: 69px;
+    width: 200px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: opacity 0.2s;
+    transition: background-color 0.2s;
+}
+.logo-item:hover{
+    cursor: pointer;
+    opacity: 0.8;
+    background-color: rgb(247, 203, 149);
+
+}
+.logo-item.active {
+    background-color: rgb(244, 183, 108);
+    font-weight: bold;
+    cursor: default;
+}
+.logo-item:disabled {
+    font-weight: bold;
+    opacity: 0.99;
+}
+
+.logo-item img{
+    margin-bottom: 4px;
+}
+.logo-item p{
+    margin: 0;
+    font-family: sans-serif;
+    font-size: 17px;
+    font-weight: bold;
+}
+.ReviewLogo{
+    height: 30px;
+    width: 30px;
+}
+.LearnLogo{
+    height: 30px;
+    width: 30px;
+}
+.NotebookLogo{
+    height: 30px;
+    width: 30px;
+}
+.ProgressLogo{
+    height: 60px;
+    width: 30px;
+}
+.right_section{
+    padding: 25px;
+    gap: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family:sans-serif;
+    font-weight: bold;
+}
+.avatar{
+    height:auto;
+    width: 50px;
+}
+.avatar:hover{
+    cursor: pointer;
+}
+.Footer-Footerinfo{
+    width: 100%;
+    margin-bottom: 0;
+    height: 100px;
+    z-index: 100;
+    background-color: bisque;
+}
