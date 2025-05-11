@@ -7,7 +7,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         <img class="FlameoLogo" src="../assets/FlameoLogo.png">
     </div>
     <div class="middle_section">
-        <form method="post" action="../Pages/Review.php">
+        <form method="post" action="../pages/Review.php">
             <button class="logo-item <?= $currentPage == 'Review.php' ? 'active' : '' ?>" 
                     type="submit" name="page" value="review"
                     <?= $currentPage == 'Review.php' ? 'disabled' : '' ?>>
@@ -15,7 +15,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <p>Ôn tập</p>
             </button>   
         </form>
-        <form method="post" action="../Pages/Learn.php">
+        <form method="post" action="../pages/Learn.php">
             <button class="logo-item <?= $currentPage == 'Learn.php' ? 'active' : '' ?>" 
                     type="submit" name="page" value="learn"
                     <?= $currentPage == 'Learn.php' ? 'disabled' : '' ?>>
@@ -23,7 +23,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <p>Học từ mới</p>
             </button>
         </form>
-        <form method="post" action="../Pages/Notebook.php">
+        <form method="post" action="../pages/Notebook.php">
             <button class="logo-item <?= $currentPage == 'Notebook.php' ? 'active' : '' ?>" 
                     type="submit" name="page" value="notebook"
                     <?= $currentPage == 'Notebook.php' ? 'disabled' : '' ?>>
@@ -31,7 +31,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <p>Sổ tay</p>
             </button>
         </form>
-        <form method="post" action="../Pages/Progress.php">
+        <form method="post" action="../pages/Progress.php">
             <button class="logo-item <?= $currentPage == 'Progress.php' ? 'active' : '' ?>" 
                     type="submit" name="page" value="progress"
                     <?= $currentPage == 'Progress.php' ? 'disabled' : '' ?>>

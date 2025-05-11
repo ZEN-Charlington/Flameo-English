@@ -6,8 +6,7 @@ body{
     width: 100%;
     height: 70px;
     position: fixed;
-    border-color: rgb(249, 203, 148);
-    background-color: bisque;
+    background-color: rgb(99 184 255);
     display: flex;
     flex-direction: row;
     justify-content: space-between;
@@ -16,6 +15,7 @@ body{
     width: 100px;
     align-items: center;
     display: flex;
+    margin-left: 2%;
 }
 .FlameoLogo{
     width: 150px;
@@ -46,19 +46,11 @@ body{
 .logo-item:hover{
     cursor: pointer;
     opacity: 0.8;
-    background-color: rgb(247, 203, 149);
-
+    background-color: rgb(56, 161, 246);
 }
-.logo-item.active {
-    background-color: rgb(244, 183, 108);
-    font-weight: bold;
-    cursor: default;
+.logo-item:active{
+    background-color: rgb(38, 96, 143);
 }
-.logo-item:disabled {
-    font-weight: bold;
-    opacity: 0.99;
-}
-
 .logo-item img{
     margin-bottom: 4px;
 }
@@ -81,7 +73,7 @@ body{
     width: 30px;
 }
 .ProgressLogo{
-    height: 60px;
+    height: 30px;
     width: 30px;
 }
 .right_section{
@@ -99,11 +91,4 @@ body{
 }
 .avatar:hover{
     cursor: pointer;
-}
-.Footer-Footerinfo{
-    width: 100%;
-    margin-bottom: 0;
-    height: 100px;
-    z-index: 100;
-    background-color: bisque;
 }
