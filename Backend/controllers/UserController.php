@@ -1,6 +1,4 @@
 <?php
-// controllers/UserController.php
-// Controller xử lý thông tin người dùng
 
 class UserController {
     private $db;
@@ -23,7 +21,9 @@ class UserController {
                 'email' => $this->user->email,
                 'display_name' => $this->user->display_name,
                 'role' => $this->user->role,
-                'created_at' => $this->user->created_at
+                'created_at' => $this->user->created_at,
+                'reset_token' => $this->user->reset_token,  // Thêm reset_token vào thông tin
+                'reset_token_expiry' => $this->user->reset_token_expiry  // Thêm reset_token_expiry vào thông tin
             ];
             
             // Kiểm tra xem người dùng đã có profile chưa

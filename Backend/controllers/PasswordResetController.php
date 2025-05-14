@@ -1,6 +1,4 @@
 <?php
-// controllers/PasswordResetController.php
-// Controller xử lý quên mật khẩu và đặt lại mật khẩu
 
 class PasswordResetController {
     private $db;

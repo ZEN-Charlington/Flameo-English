@@ -12,14 +12,13 @@ class AuthController {
         $this->db = $db;
         $this->user = new User($db);
     }
-
     // Đăng ký tài khoản mới (chỉ tạo User, không tạo StudentProfile)
     public function register($data) {
         // Kiểm tra dữ liệu đầu vào
         if(empty($data['email']) || empty($data['password'])) {
             return [
                 'status' => 400,
-                'message' => ERROR_EMAIL_PASSWORD_REQUIRED
+                'message' => 'ERROR_EMAIL_PASSWORD_REQUIRED'
             ];
         }
 
@@ -69,6 +68,8 @@ class AuthController {
         // Kiểm tra đăng nhập
         $result = $this->user->login();
         $user = $result->fetch(PDO::FETCH_ASSOC);
+
+        error_log(print_r($user, true));  // Ghi thông tin ra log
         
         if($user && password_verify($data['password'], $user['password'])) {
             // Tạo token JWT

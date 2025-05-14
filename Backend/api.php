@@ -1,225 +1,403 @@
 <?php
-// backend/api.php
-// API Router chính
-
+// api.php
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json; charset=UTF-8");
 header("Access-Control-Allow-Methods: POST, GET, PUT, DELETE");
 header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With");
 
-// Thời gian thực thi API không giới hạn (tùy chỉnh nếu cần)
-set_time_limit(0);
+// Xử lý CORS preflight request
+if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
+    header("HTTP/1.1 200 OK");
+    exit();
+}
 
-// Include các file cần thiết
-include_once 'config/Database.php';
-include_once 'config/Constants.php';
-include_once 'models/User.php';
-include_once 'models/StudentProfile.php';
-include_once 'controllers/AuthController.php';
-include_once 'controllers/UserController.php';
-include_once 'controllers/AuthMiddleware.php';
-include_once 'controllers/PasswordResetController.php';
+// Include files cấu hình
+require_once 'config/Constants.php';
+require_once 'config/database.php';
 
-// Kết nối database
+// Khởi tạo kết nối database
 $database = new Database();
 $db = $database->getConnection();
 
-// Lấy HTTP method
-$method = $_SERVER['REQUEST_METHOD'];
+// Include các models
+require_once 'models/User.php';
+require_once 'models/StudentProfile.php';
+require_once 'models/Vocabulary.php';
+require_once 'models/Lesson.php';
+require_once 'models/LessonVocabulary.php';
+require_once 'models/Topic.php';
+require_once 'models/TopicLesson.php';
+require_once 'models/Progress.php';
 
-// Phân tích URI để lấy endpoint
-$request_uri = $_SERVER['REQUEST_URI'];
+// Include các controllers
+require_once 'controllers/AuthController.php';
+require_once 'controllers/AuthMiddleware.php';
+require_once 'controllers/UserController.php';
+require_once 'controllers/VocabularyController.php';
+require_once 'controllers/LessonController.php';
+require_once 'controllers/TopicController.php';
+require_once 'controllers/ProgressController.php';
+require_once 'controllers/PasswordResetController.php';
 
-// Lấy phần sau /backend/api.php/ trong URL
-if (strpos($request_uri, '/backend/api.php/') !== false) {
-    $uri_parts = explode('/backend/api.php/', $request_uri);
-    if (count($uri_parts) > 1) {
-        $path_info = $uri_parts[1];
-        $request = explode('/', trim($path_info, '/'));
-    } else {
-        $request = [];
-    }
-} else {
-    // Thử phương pháp khác nếu định dạng URL khác
-    $request = isset($_SERVER['PATH_INFO']) ? explode('/', trim($_SERVER['PATH_INFO'], '/')) : [];
+// Khởi tạo các controllers
+$authController = new AuthController($db);
+$authMiddleware = new AuthMiddleware($authController);
+$userController = new UserController($db);
+$vocabController = new VocabularyController($db);
+$lessonController = new LessonController($db);
+$topicController = new TopicController($db);
+$progressController = new ProgressController($db);
+$passwordResetController = new PasswordResetController($db);
+
+// Lấy request method và endpoint
+$request_method = $_SERVER["REQUEST_METHOD"];
+$request_uri = $_SERVER["REQUEST_URI"];
+$url_parts = explode('/', trim(parse_url($request_uri, PHP_URL_PATH), '/'));
+$endpoint = end($url_parts);
+
+// Lấy ID từ URL nếu có
+$id = null;
+if (count($url_parts) > 1 && is_numeric($url_parts[count($url_parts) - 1])) {
+    $id = intval($url_parts[count($url_parts) - 1]);
+    $endpoint = $url_parts[count($url_parts) - 2];
 }
-
-// API endpoints
-$endpoint = $request[0] ?? '';
-$subEndpoint = $request[1] ?? '';
 
 // Lấy dữ liệu từ request
 $data = json_decode(file_get_contents("php://input"), true);
+if (!$data) {
+    $data = $_POST;
+}
 
-// Khởi tạo các controller
-$authController = new AuthController($db);
-$userController = new UserController($db);
-$authMiddleware = new AuthMiddleware($authController);
-$passwordResetController = new PasswordResetController($db);
-
-// Debug mode - Bỏ comment dòng dưới để debug đường dẫn
-// echo json_encode(['request_uri' => $request_uri, 'endpoint' => $endpoint, 'subEndpoint' => $subEndpoint, 'request' => $request]);
-// exit;
-
-// Xử lý API
-switch($endpoint) {
-    case 'register':
-        if($method === 'POST') {
-            $result = $authController->register($data);
-            http_response_code($result['status']);
-            echo json_encode($result);
-        } else {
-            http_response_code(405);
-            echo json_encode(['message' => 'Phương thức không được hỗ trợ']);
-        }
+// Xử lý API routes
+switch ($request_method) {
+    case 'GET':
+        handleGetRequests();
         break;
-        
-    case 'login':
-        if($method === 'POST') {
-            $result = $authController->login($data);
-            http_response_code($result['status']);
-            echo json_encode($result);
-        } else {
-            http_response_code(405);
-            echo json_encode(['message' => 'Phương thức không được hỗ trợ']);
-        }
+    case 'POST':
+        handlePostRequests();
         break;
-    
-    case 'verify-token':
-        if($method === 'GET') {
-            $headers = getallheaders();
-            $auth = isset($headers['Authorization']) ? $headers['Authorization'] : '';
+    case 'PUT':
+        handlePutRequests();
+        break;
+    case 'DELETE':
+        handleDeleteRequests();
+        break;
+    default:
+        echo json_encode(["status" => "error", "message" => "Request method không hợp lệ"]);
+        break;
+}
+
+// Xử lý GET requests
+function handleGetRequests() {
+    global $authMiddleware, $userController, $vocabController, 
+           $lessonController, $topicController, $progressController, 
+           $endpoint, $id, $url_parts;
+    switch ($endpoint) {
+        case 'user-info':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($userController->getUserInfo($userData['user_id']));
+            } else {
+                echo json_encode([
+                    "status" => 401,
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
             
-            if(strpos($auth, 'Bearer ') === 0) {
-                $token = substr($auth, 7);
-                $userData = $authController->validateToken($token);
-                
-                if($userData) {
-                    // Token hợp lệ, kiểm tra thời hạn
-                    $expiration = $authController->checkTokenExpiration($token);
-                    
-                    echo json_encode([
-                        'status' => 200,
-                        'valid' => true,
-                        'expiration' => $expiration,
-                        'user_id' => $userData['user_id'],
-                        'email' => $userData['email'],
-                        'role' => $userData['role']
-                    ]);
+        case 'vocabulary':
+            if ($id) {
+                // Nếu đã xác thực, lấy thông tin từ vựng kèm tiến độ học
+                $userData = $authMiddleware->isAuthenticated();
+                if ($userData) {
+                    echo json_encode($vocabController->getVocabularyWithProgress($id, $userData['user_id']));
                 } else {
-                    // Token không hợp lệ hoặc đã hết hạn
+                    echo json_encode($vocabController->getVocabulary($id));
+                }
+            } else {
+                echo json_encode($vocabController->getAllVocabulary());
+            }
+            break;
+            
+        case 'search-vocabulary':
+            $keyword = isset($_GET['keyword']) ? $_GET['keyword'] : '';
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($vocabController->searchVocabulary($keyword, $userData['user_id']));
+            } else {
+                echo json_encode($vocabController->searchVocabulary($keyword));
+            }
+            break;
+            
+        case 'random-vocabulary':
+            $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 10;
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($vocabController->getRandomVocabulary($limit, $userData['user_id']));
+            } else {
+                echo json_encode($vocabController->getRandomVocabulary($limit));
+            }
+            break;
+            
+        case 'lessons':
+            if ($id) {
+                echo json_encode($lessonController->getLesson($id));
+            } else {
+                echo json_encode($lessonController->getAllLessons());
+            }
+            break;
+            
+        case 'topics':
+            if ($id) {
+                echo json_encode($topicController->getTopic($id));
+            } else {
+                echo json_encode($topicController->getAllTopics());
+            }
+            break;
+            
+        case 'topic-lessons':
+            $topic_id = isset($_GET['topic_id']) ? intval($_GET['topic_id']) : 0;
+            if ($topic_id > 0) {
+                $userData = $authMiddleware->isAuthenticated();
+                if ($userData) {
+                    echo json_encode($lessonController->getLessonsByTopic($topic_id, $userData['user_id']));
+                } else {
+                    echo json_encode($lessonController->getLessonsByTopic($topic_id));
+                }
+            } else {
+                echo json_encode(["status" => 400, "message" => "Thiếu topic_id"]);
+            }
+            break;
+            
+        case 'lesson-vocabulary':
+            $lesson_id = isset($_GET['lesson_id']) ? intval($_GET['lesson_id']) : 0;
+            if ($lesson_id > 0) {
+                $userData = $authMiddleware->isAuthenticated();
+                if ($userData) {
+                    echo json_encode($lessonController->getLessonVocabularyWithProgress($lesson_id, $userData['user_id']));
+                } else {
+                    $lesson = $lessonController->getLesson($lesson_id);
+                    echo json_encode($lesson);
+                }
+            } else {
+                echo json_encode(["status" => 400, "message" => "Thiếu lesson_id"]);
+            }
+            break;
+            
+        case 'user-progress':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($progressController->getUserProgress($userData['user_id']));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+            
+        case 'progress-stats':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($progressController->getProgressStats($userData['user_id']));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+            
+        case 'words-to-review':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 10;
+                echo json_encode($progressController->getWordsToReview($userData['user_id'], $limit));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+            
+        case 'topics-with-progress':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($topicController->getTopicsWithProgress($userData['user_id']));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+            
+        default:
+            echo json_encode(["status" => 404, "message" => "Endpoint không hợp lệ"]);
+            break;
+    }
+}
+
+// Xử lý POST requests
+function handlePostRequests() {
+    global $authController, $authMiddleware, $userController, 
+           $progressController, $passwordResetController, $endpoint, $data;
+    
+    switch ($endpoint) {
+        case 'login':
+            if (isset($data['email']) && isset($data['password'])) {
+                echo json_encode($authController->login($data));
+            } else {
+                echo json_encode([
+                    "status" => 400, 
+                    "message" => ERROR_EMAIL_PASSWORD_REQUIRED
+                ]);
+            }
+            break;
+            
+        case 'register':
+            if (isset($data['email']) && isset($data['password'])) {
+                // Đặt giá trị mặc định cho display_name nếu không có
+                $data['display_name'] = isset($data['display_name']) ? $data['display_name'] : DEFAULT_DISPLAY_NAME;
+                echo json_encode($authController->register($data));
+            } else {
+                echo json_encode([
+                    "status" => 400, 
+                    "message" => ERROR_EMAIL_PASSWORD_REQUIRED
+                ]);
+            }
+            break;
+            
+        case 'update-vocab-progress':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                if (isset($data['vocab_id']) && isset($data['is_memorized'])) {
+                    echo json_encode($progressController->updateVocabProgress(
+                        $userData['user_id'], 
+                        $data['vocab_id'], 
+                        $data['is_memorized']
+                    ));
+                } else {
                     echo json_encode([
-                        'status' => 401,
-                        'valid' => false,
-                        'message' => ERROR_INVALID_TOKEN
+                        "status" => 400, 
+                        "message" => "Thiếu vocab_id hoặc is_memorized"
                     ]);
                 }
             } else {
                 echo json_encode([
-                    'status' => 400,
-                    'valid' => false,
-                    'message' => 'Không tìm thấy token'
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
                 ]);
             }
-        } else {
-            http_response_code(405);
-            echo json_encode(['message' => 'Phương thức không được hỗ trợ']);
-        }
-        break;
-        
-    case 'user':
-        // Kiểm tra token
-        $userData = $authMiddleware->isAuthenticated();
-        
-        if($userData) {
-            $user_id = $userData['user_id'];
+            break;
             
-            // Xử lý các sub-endpoints của user
-            if($subEndpoint === '') {
-                // /user - Thông tin cơ bản
-                if($method === 'GET') {
-                    $result = $userController->getUserInfo($user_id);
-                    http_response_code($result['status']);
-                    echo json_encode($result);
-                } else if($method === 'PUT') {
-                    // Cập nhật display_name
-                    $result = $userController->updateUserInfo($user_id, $data);
-                    http_response_code($result['status']);
-                    echo json_encode($result);
-                } else {
-                    http_response_code(405);
-                    echo json_encode(['message' => 'Phương thức không được hỗ trợ']);
-                }
-            } else if($subEndpoint === 'profile') {
-                // /user/profile - Thông tin cá nhân
-                if($method === 'PUT') {
-                    // Cập nhật hoặc tạo mới profile
-                    $result = $userController->updateProfile($user_id, $data);
-                    http_response_code($result['status']);
-                    echo json_encode($result);
-                } else {
-                    http_response_code(405);
-                    echo json_encode(['message' => 'Phương thức không được hỗ trợ']);
-                }
+        case 'update-profile':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($userController->updateProfile($userData['user_id'], $data));
             } else {
-                http_response_code(404);
-                echo json_encode(['message' => 'API endpoint không tồn tại']);
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
             }
-        } else {
-            http_response_code(401);
-            echo json_encode(['message' => ERROR_UNAUTHORIZED]);
-        }
-        break;
-    case 'forgot-password':
-        if($method === 'POST') {
-            $result = $passwordResetController->forgotPassword($data);
-            http_response_code($result['status']);
-            echo json_encode($result);
-        } else {
-            http_response_code(405);
-            echo json_encode(['message' => 'Phương thức không được hỗ trợ']);
-        }
-        break;
+            break;
+            
+        case 'forgot-password':
+            if (isset($data['email'])) {
+                echo json_encode($passwordResetController->forgotPassword($data));
+            } else {
+                echo json_encode([
+                    "status" => 400, 
+                    "message" => "Thiếu email"
+                ]);
+            }
+            break;
+            
+        case 'verify-token':
+            if (isset($data['token'])) {
+                echo json_encode($passwordResetController->verifyToken($data['token']));
+            } else {
+                echo json_encode([
+                    "status" => 400, 
+                    "message" => "Thiếu token"
+                ]);
+            }
+            break;
+            
+        case 'reset-password':
+            if (isset($data['token']) && isset($data['password'])) {
+                echo json_encode($passwordResetController->resetPassword($data));
+            } else {
+                echo json_encode([
+                    "status" => 400, 
+                    "message" => "Thiếu token hoặc mật khẩu mới"
+                ]);
+            }
+            break;
+            
+        default:
+            echo json_encode(["status" => 404, "message" => "Endpoint không hợp lệ"]);
+            break;
+    }
+}
+
+// Xử lý PUT requests
+function handlePutRequests() {
+    global $authMiddleware, $userController, $endpoint, $id, $data;
     
-    case 'verify-reset-token':
-        if($method === 'GET' && isset($request[1])) {
-            $token = $request[1];
-            $result = $passwordResetController->verifyToken($token);
-            http_response_code($result['status']);
-            echo json_encode($result);
-        } else {
-            http_response_code(400);
-            echo json_encode(['message' => 'Token không hợp lệ']);
-        }
-        break;
+    switch ($endpoint) {
+        case 'user-info':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($userController->updateUserInfo($userData['user_id'], $data));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+            
+        case 'profile':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($userController->updateProfile($userData['user_id'], $data));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+            
+        default:
+            echo json_encode(["status" => 404, "message" => "Endpoint không hợp lệ"]);
+            break;
+    }
+}
+
+// Xử lý DELETE requests
+function handleDeleteRequests() {
+    global $authMiddleware, $endpoint, $id;
     
-    case 'reset-password':
-        if($method === 'POST') {
-            $result = $passwordResetController->resetPassword($data);
-            http_response_code($result['status']);
-            echo json_encode($result);
-        } else {
-            http_response_code(405);
-            echo json_encode(['message' => 'Phương thức không được hỗ trợ']);
-        }
-        break;
-    default:
-        // Nếu không có endpoint hoặc endpoint không hợp lệ
-        if (empty($endpoint)) {
-            // Trả về thông tin API nếu gọi trực tiếp đến api.php
-            echo json_encode([
-                'status' => 200,
-                'message' => 'Flameo English API',
-                'version' => '1.0.0',
-                'endpoints' => [
-                    'register', 'login', 'verify-token', 'user', 
-                    'forgot-password', 'verify-reset-token', 'reset-password'
-                ]
-            ]);
-        } else {
-            http_response_code(404);
-            echo json_encode(['message' => 'API endpoint không tồn tại']);
-        }
-        break;
+    // Chỉ admin mới có quyền xóa
+    $userData = $authMiddleware->isAdmin();
+    
+    if (!$userData) {
+        echo json_encode([
+            "status" => 403, 
+            "message" => "Không có quyền thực hiện thao tác này"
+        ]);
+        exit();
+    }
+    
+    switch ($endpoint) {
+        // Các endpoint DELETE có thể được thêm sau khi cần thiết
+        default:
+            echo json_encode(["status" => 404, "message" => "Endpoint không hợp lệ"]);
+            break;
+    }
 }
 ?>
