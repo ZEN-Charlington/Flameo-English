@@ -37,8 +37,12 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             </button>
         </form>
     </div>
-    <div class="right_section">
-        <p>Welcome To Flameo!</p>
+    <div class="right_section" id="user-section">
         <img class="avatar" src="./assets/AppAvatar.png">
     </div>
 </nav>
+
+<link rel="stylesheet" href="../Style/auth-navbar.css">
+<link rel="stylesheet" href="../Style/transition.css">
+<script src="./js/auth-navbar.js"></script>
+<script src="./js/common.js"></script>

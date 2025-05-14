@@ -16,13 +16,13 @@
         <div class="footer-section">
             <h3 class="footer-heading">FOLLOW US:</h3>
             <div class="social-icons">
-                <a href="https://www.facebook.com/lam.tieu.minh.2024" class="social-icon facebook">
+                <a href="https://www.facebook.com/lam.tieu.minh.2024" class="social-icon facebook" target="_blank">
                     <img src="../assets/facebook.webp" alt="facebook">
                 </a>
-                <a href="https://www.instagram.com/charlington1610/" class="social-icon instagram">
+                <a href="https://www.instagram.com/charlington1610/" class="social-icon instagram" target="_blank">
                     <img src="../assets/instagram.png" alt="Instagram">
                 </a>
-                <a href="https://www.youtube.com/@charlington2304" class="social-icon youtube">
+                <a href="https://www.youtube.com/@charlington2304" class="social-icon youtube" target="_blank">
                     <img src="../assets/youtube.png" alt="Youtube">
                 </a>
             </div>
