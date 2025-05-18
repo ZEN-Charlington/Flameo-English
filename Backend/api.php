@@ -149,12 +149,83 @@ function handleGetRequests() {
             
         case 'topics':
             if ($id) {
-                echo json_encode($topicController->getTopic($id));
+                $userData = $authMiddleware->isAuthenticated();
+                if ($userData && isset($_GET['with_progress'])) {
+                    echo json_encode($topicController->getTopicWithProgress($id, $userData['user_id']));
+                } else {
+                    echo json_encode($topicController->getTopic($id));
+                }
             } else {
-                echo json_encode($topicController->getAllTopics());
+                $userData = $authMiddleware->isAuthenticated();
+                if ($userData && isset($_GET['with_progress'])) {
+                    echo json_encode($topicController->getAllTopicsWithProgress($userData['user_id']));
+                } else {
+                    echo json_encode($topicController->getAllTopics());
+                }
+            }
+            break;
+
+        case 'today-vocabulary':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($progressController->getTodayVocabulary($userData['user_id']));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+        case 'today-yesterday-vocabulary':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($progressController->getTodayAndYesterdayVocabulary($userData['user_id']));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+        case 'similar-words':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                $word_type = isset($_GET['word_type']) ? $_GET['word_type'] : 'noun';
+                $vocab_id = isset($_GET['vocab_id']) ? intval($_GET['vocab_id']) : 0;
+                $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 5;
+                
+                echo json_encode($progressController->getSimilarWords($word_type, $vocab_id, $limit));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+        case 'vocabulary-stats-by-type':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($vocabController->getVocabularyStatsByType($userData['user_id']));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
             }
             break;
             
+        case 'learning-stats':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($progressController->getLearningStats($userData['user_id']));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+                    
         case 'topic-lessons':
             $topic_id = isset($_GET['topic_id']) ? intval($_GET['topic_id']) : 0;
             if ($topic_id > 0) {
@@ -187,7 +258,7 @@ function handleGetRequests() {
         case 'user-progress':
             $userData = $authMiddleware->isAuthenticated();
             if ($userData) {
-                echo json_encode($progressController->getUserProgress($userData['user_id']));
+                echo json_encode($progressController->getUserVocabProgress($userData['user_id']));
             } else {
                 echo json_encode([
                     "status" => 401, 
@@ -199,7 +270,7 @@ function handleGetRequests() {
         case 'progress-stats':
             $userData = $authMiddleware->isAuthenticated();
             if ($userData) {
-                echo json_encode($progressController->getProgressStats($userData['user_id']));
+                echo json_encode($progressController->getVocabProgressStats($userData['user_id']));
             } else {
                 echo json_encode([
                     "status" => 401, 
@@ -224,7 +295,56 @@ function handleGetRequests() {
         case 'topics-with-progress':
             $userData = $authMiddleware->isAuthenticated();
             if ($userData) {
-                echo json_encode($topicController->getTopicsWithProgress($userData['user_id']));
+                echo json_encode($progressController->getUserTopicsProgress($userData['user_id']));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+        // Thêm vào phần handleGetRequests() trong api.php
+        case 'notebook-vocabulary':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($progressController->getUserVocabWithDetails($userData['user_id']));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+            
+        case 'completed-lessons':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($progressController->getUserCompletedLessons($userData['user_id']));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+            
+        case 'lesson-progress':
+            $userData = $authMiddleware->isAuthenticated();
+            $lesson_id = isset($_GET['lesson_id']) ? intval($_GET['lesson_id']) : 0;
+            if ($userData && $lesson_id > 0) {
+                echo json_encode($progressController->calculateLessonProgress($userData['user_id'], $lesson_id));
+            } else {
+                echo json_encode([
+                    "status" => 400, 
+                    "message" => "Thiếu lesson_id hoặc chưa xác thực"
+                ]);
+            }
+            break;
+            
+        case 'overall-progress':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($progressController->getOverallProgress($userData['user_id']));
             } else {
                 echo json_encode([
                     "status" => 401, 
@@ -292,6 +412,72 @@ function handlePostRequests() {
             }
             break;
             
+        case 'complete-lesson':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                if (isset($data['lesson_id'])) {
+                    echo json_encode($progressController->handleCompleteLessonRequest(
+                        $userData['user_id'], 
+                        $data['lesson_id']
+                    ));
+                } else {
+                    echo json_encode([
+                        "status" => 400, 
+                        "message" => "Thiếu lesson_id"
+                    ]);
+                }
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+            
+        case 'update-topic-progress':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                if (isset($data['topic_id'])) {
+                    echo json_encode($progressController->updateTopicProgress(
+                        $userData['user_id'], 
+                        $data['topic_id']
+                    ));
+                } else {
+                    echo json_encode([
+                        "status" => 400, 
+                        "message" => "Thiếu topic_id"
+                    ]);
+                }
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+            
+        case 'check-lesson-completion':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                if (isset($data['lesson_id'])) {
+                    echo json_encode($progressController->checkAndUpdateLessonCompletion(
+                        $userData['user_id'], 
+                        $data['lesson_id']
+                    ));
+                } else {
+                    echo json_encode([
+                        "status" => 400, 
+                        "message" => "Thiếu lesson_id"
+                    ]);
+                }
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+            
         case 'update-profile':
             $userData = $authMiddleware->isAuthenticated();
             if ($userData) {
@@ -333,6 +519,31 @@ function handlePostRequests() {
                 echo json_encode([
                     "status" => 400, 
                     "message" => "Thiếu token hoặc mật khẩu mới"
+                ]);
+            }
+            break;
+
+        case 'reset-progress':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($progressController->resetUserProgress($userData['user_id']));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+            
+        case 'create-progress-tables':
+            // Chỉ admin mới có quyền tạo bảng
+            $userData = $authMiddleware->isAdmin();
+            if ($userData) {
+                echo json_encode($progressController->createTablesIfNotExist());
+            } else {
+                echo json_encode([
+                    "status" => 403, 
+                    "message" => "Không có quyền thực hiện thao tác này"
                 ]);
             }
             break;

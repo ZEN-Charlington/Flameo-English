@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import useAuthStore from './store/authStore';
-
+import useProgressStore from './store/progressStore';
 
 // Import các trang
 import LoginPage from './pages/LoginPage';
@@ -10,6 +10,8 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import ReviewPage from './pages/ReviewPage';
 import LearnPage from './pages/LearnPage';
+import TopicDetailPage from './pages/TopicDetailPage';
+import LessonPage from './pages/LessonPage';
 import NotebookPage from './pages/NotebookPage';
 import ProgressPage from './pages/ProgressPage';
 
@@ -32,12 +34,20 @@ const ProtectedRoute = ({ children }) => {
 };
 
 const App = () => {
-  const { checkAuth } = useAuthStore();
+  const { checkAuth, user } = useAuthStore();
+  const { fetchAllProgress } = useProgressStore();
   
   // Kiểm tra xác thực khi ứng dụng khởi động
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
+  
+  // Tải dữ liệu tiến độ khi user đã xác thực
+  useEffect(() => {
+    if (user) {
+      fetchAllProgress().catch(err => console.error("Error fetching progress data:", err));
+    }
+  }, [user, fetchAllProgress]);
   
   return (
     <Routes>
@@ -58,6 +68,16 @@ const App = () => {
         <Route path="learn" element={
           <ProtectedRoute>
             <LearnPage />
+          </ProtectedRoute>
+        } />
+        <Route path="topics/:topicId" element={
+          <ProtectedRoute>
+            <TopicDetailPage />
+          </ProtectedRoute>
+        } />
+        <Route path="lessons/:lessonId" element={
+          <ProtectedRoute>
+            <LessonPage />
           </ProtectedRoute>
         } />
         <Route path="notebook" element={

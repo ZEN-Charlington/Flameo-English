@@ -7,7 +7,10 @@ const Layout = () => {
   return (
     <Box minH="100vh">
       <Navbar />
-      <Box as="main">
+      <Box 
+        as="main" 
+        pt="74px" 
+      >
         <Outlet />
       </Box>
     </Box>

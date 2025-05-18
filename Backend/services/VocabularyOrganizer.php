@@ -58,7 +58,6 @@ class VocabularyOrganizer {
             'Emerging Technologies' => ['technology', 'innovation', 'artificial', 'intelligence', 'virtual', 'reality', 'robot', 'automation', 'digital', 'smart', 'future', 'development', 'advanced', 'revolutionary', 'cutting-edge']
         ]
     ];
-    
     // Chi tiết cho các loại từ
     private $wordTypeKeywords = [
         'noun' => [

@@ -1,4 +1,4 @@
-// src/pages/LearnPage.jsx (đã điều chỉnh)
+// src/pages/LearnPage.jsx
 import React, { useEffect, useState } from 'react';
 import {
   Box,
@@ -7,46 +7,22 @@ import {
   Text,
   VStack,
   SimpleGrid,
-  Button,
   Flex,
   useColorModeValue,
-  Select,
   Input,
   FormControl,
   FormLabel,
-  Tabs,
-  TabList,
-  Tab,
-  TabPanels,
-  TabPanel,
-  useDisclosure,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalCloseButton,
-  ModalBody,
+  Button,
+  Alert,
+  AlertIcon,
+  Spinner
 } from '@chakra-ui/react';
-import FlashCard from '../components/FlashCard';
 import TopicCard from '../components/TopicCard';
 import useTopicStore from '../store/topicStore';
-import useVocabularyStore from '../store/vocabularyStore';
 
 const LearnPage = () => {
-  const { topics, fetchAllTopics, isLoadingTopics } = useTopicStore();
-  const { 
-    newVocabulary, 
-    fetchNewVocabulary, 
-    currentVocabIndex,
-    nextVocabulary,
-    previousVocabulary,
-    markVocabularyStatus,
-    isLoading: isLoadingVocab 
-  } = useVocabularyStore();
-  
-  const [selectedTopicId, setSelectedTopicId] = useState('');
+  const { topics, fetchAllTopics, isLoadingTopics, error } = useTopicStore();
   const [searchTerm, setSearchTerm] = useState('');
-  const { isOpen, onOpen, onClose } = useDisclosure();
   
   const cardBg = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
@@ -55,9 +31,17 @@ const LearnPage = () => {
     'linear(to-b, gray.900, gray.800)'
   );
   
-  // Lấy danh sách chủ đề
+  // Lấy dữ liệu khi component mount
   useEffect(() => {
-    fetchAllTopics();
+    const loadData = async () => {
+      try {
+        await fetchAllTopics();
+      } catch (error) {
+        console.error('Error loading learn page data:', error);
+      }
+    };
+    
+    loadData();
   }, [fetchAllTopics]);
   
   // Lọc chủ đề theo tên
@@ -65,23 +49,7 @@ const LearnPage = () => {
     topic.topic_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
   
-  // Xử lý khi chọn một chủ đề để học
-  const handleSelectTopic = (topicId) => {
-    setSelectedTopicId(topicId);
-    fetchNewVocabulary(topicId);
-    onOpen(); // Mở modal học từ vựng
-  };
-  
-  // Xử lý đánh dấu từ vựng
-  const handleMarkVocabulary = async (vocabId, isMemorized) => {
-    await markVocabularyStatus(vocabId, isMemorized);
-    // Tự động chuyển sang từ tiếp theo sau khi đánh dấu
-    if (isMemorized) {
-      setTimeout(() => {
-        nextVocabulary();
-      }, 500);
-    }
-  };
+  const isLoading = isLoadingTopics;
   
   return (
     <Box
@@ -101,6 +69,14 @@ const LearnPage = () => {
           >
             Học từ mới
           </Heading>
+          
+          {/* Hiển thị lỗi nếu có */}
+          {error && (
+            <Alert status="error" borderRadius="md">
+              <AlertIcon />
+              <Text>{error}</Text>
+            </Alert>
+          )}
           
           {/* Bộ lọc */}
           <Box 
@@ -144,18 +120,13 @@ const LearnPage = () => {
             
             {isLoadingTopics ? (
               <Flex justify="center" py={10}>
+                <Spinner size="xl" color="blue.500" mr={2} />
                 <Text>Đang tải chủ đề...</Text>
               </Flex>
             ) : filteredTopics.length > 0 ? (
               <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
                 {filteredTopics.map(topic => (
-                  <Box 
-                    key={topic.topic_id}
-                    onClick={() => handleSelectTopic(topic.topic_id)}
-                    cursor="pointer"
-                  >
-                    <TopicCard topic={topic} />
-                  </Box>
+                  <TopicCard key={topic.topic_id} topic={topic} />
                 ))}
               </SimpleGrid>
             ) : (
@@ -182,51 +153,6 @@ const LearnPage = () => {
           </Box>
         </VStack>
       </Container>
-      
-      {/* Modal học từ vựng */}
-      <Modal isOpen={isOpen} onClose={onClose} size="xl" scrollBehavior="inside">
-        <ModalOverlay />
-        <ModalContent maxW="800px">
-          <ModalHeader>
-            {topics.find(t => t.topic_id.toString() === selectedTopicId.toString())?.topic_name || 'Học từ mới'}
-          </ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
-            {isLoadingVocab ? (
-              <Flex justify="center" py={10}>
-                <Text>Đang tải từ vựng...</Text>
-              </Flex>
-            ) : newVocabulary.length > 0 ? (
-              <VStack spacing={6}>
-                <Flex w="100%" justify="space-between" align="center" mb={2}>
-                  <Text>
-                    {currentVocabIndex + 1} / {newVocabulary.length}
-                  </Text>
-                  <Button size="sm" onClick={onClose}>
-                    Lưu và thoát
-                  </Button>
-                </Flex>
-                
-                {/* Flashcard từ vựng */}
-                <FlashCard 
-                  vocabulary={newVocabulary[currentVocabIndex]}
-                  onMarkMemorized={(vocabId) => handleMarkVocabulary(vocabId, true)}
-                  onMarkNotMemorized={(vocabId) => handleMarkVocabulary(vocabId, false)}
-                  onNext={nextVocabulary}
-                  onPrevious={previousVocabulary}
-                />
-              </VStack>
-            ) : (
-              <Flex direction="column" align="center" justify="center" py={6}>
-                <Text fontSize="lg" mb={4}>Không có từ vựng nào trong chủ đề này</Text>
-                <Button colorScheme="blue" onClick={onClose}>
-                  Quay lại
-                </Button>
-              </Flex>
-            )}
-          </ModalBody>
-        </ModalContent>
-      </Modal>
     </Box>
   );
 };

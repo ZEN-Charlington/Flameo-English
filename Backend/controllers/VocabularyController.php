@@ -119,4 +119,57 @@ class VocabularyController {
             return ['status' => 'error', 'message' => 'Không thể lấy từ vựng ngẫu nhiên'];
         }
     }
+
+    public function getVocabularyStatsByType($user_id) {
+        try {
+            // SQL để lấy thống kê từ vựng theo loại từ (word_type)
+            $query = "
+                SELECT 
+                    COALESCE(v.word_type, 'Chưa phân loại') AS word_type,
+                    COUNT(v.vocab_id) AS total,
+                    SUM(CASE WHEN p.is_memorized = 1 THEN 1 ELSE 0 END) AS memorized
+                FROM Vocabulary v
+                JOIN Progress p ON v.vocab_id = p.vocab_id
+                WHERE p.user_id = :user_id
+                GROUP BY v.word_type
+                ORDER BY 
+                    CASE WHEN v.word_type IS NULL THEN 1 ELSE 0 END,
+                    v.word_type
+            ";
+            
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
+            $stmt->execute();
+            $stats = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Xử lý chuẩn hóa dữ liệu
+            $formattedStats = [];
+            foreach ($stats as $item) {
+                // Chuẩn hóa loại từ: Viết hoa chữ cái đầu, xử lý null
+                $type = $item['word_type'];
+                if ($type === null || trim($type) === '') {
+                    $type = 'Chưa phân loại';
+                } else {
+                    // Chuyển về chữ thường và viết hoa chữ cái đầu
+                    $type = ucfirst(strtolower(trim($type)));
+                }
+                
+                $formattedStats[] = [
+                    'type' => $type,
+                    'total' => (int)$item['total'],
+                    'memorized' => (int)$item['memorized']
+                ];
+            }
+            
+            return [
+                'status' => 200,
+                'data' => $formattedStats
+            ];
+        } catch (Exception $e) {
+            return [
+                'status' => 500,
+                'message' => 'Lỗi khi lấy thống kê từ vựng theo loại: ' . $e->getMessage()
+            ];
+        }
+    }
 }

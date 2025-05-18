@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+// src/pages/ProgressPage.jsx (Đã cập nhật)
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Container,
@@ -20,13 +21,23 @@ import {
   TabList,
   TabPanel,
   TabPanels,
-  Tabs
+  Tabs,
+  Spinner,
+  Divider,
+  Alert,
+  AlertIcon,
+  Badge,
+  Card,
+  CardHeader,
+  CardBody
 } from '@chakra-ui/react';
-import useProgressStore  from '../store/progressStore';
+import { FaTrophy, FaBookOpen, FaBook, FaStar } from 'react-icons/fa';
+import useProgressStore from '../store/progressStore';
+import useVocabularyStore from '../store/vocabularyStore';
 
 // Component hiển thị biểu đồ
 const ProgressChart = ({ title, value, max, color, icon }) => {
-  const percentage = (value / max) * 100;
+  const percentage = max > 0 ? (value / max) * 100 : 0;
   const cardBg = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   
@@ -66,12 +77,24 @@ const ProgressChart = ({ title, value, max, color, icon }) => {
 
 const ProgressPage = () => {
   const { 
-    overallProgress, 
-    topicProgress, 
-    weeklyStats, 
+    overallProgress,
+    topicProgress,
+    completedLessons,
+    vocabProgress,
     fetchAllProgress,
-    isLoading
+    isLoading: isProgressLoading,
+    error: progressError
   } = useProgressStore();
+  
+  const {
+    vocabularyStatsByType,
+    fetchVocabularyStatsByType,
+    isLoading: isVocabStatsLoading,
+    error: vocabStatsError
+  } = useVocabularyStore();
+  
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   
   const cardBg = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
@@ -79,10 +102,67 @@ const ProgressPage = () => {
     'linear(to-b, blue.50, gray.50)',
     'linear(to-b, gray.900, gray.800)'
   );
+  const completedLessonBg = useColorModeValue('gray.50', 'gray.700');
+  const completedLessonText = useColorModeValue('gray.500', 'gray.300');
   
   useEffect(() => {
-    fetchAllProgress();
-  }, [fetchAllProgress]);
+    // Tải song song dữ liệu tiến độ và thống kê từ vựng theo loại
+    const loadData = async () => {
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        // Gọi cả hai API song song sử dụng Promise.all
+        await Promise.all([
+          fetchAllProgress(),
+          fetchVocabularyStatsByType()
+        ]);
+      } catch (err) {
+        console.error("Lỗi khi tải dữ liệu:", err);
+        setError(err.message || "Đã xảy ra lỗi khi tải dữ liệu");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadData();
+  }, [fetchAllProgress, fetchVocabularyStatsByType]);
+  
+  // Tạo dữ liệu thống kê theo ngày từ vocabProgress
+  const createDailyStats = () => {
+    if (!vocabProgress || vocabProgress.length === 0) {
+      return [];
+    }
+    
+    // Tạo map với key là ngày, value là số từ học trong ngày đó
+    const dailyMap = {};
+    
+    vocabProgress.forEach(progress => {
+      if (progress.last_review_date) {
+        const date = new Date(progress.last_review_date).toLocaleDateString();
+        if (!dailyMap[date]) {
+          dailyMap[date] = 0;
+        }
+        dailyMap[date]++;
+      }
+    });
+    
+    // Chuyển từ map sang mảng
+    const result = Object.entries(dailyMap).map(([date, count]) => ({
+      date,
+      count
+    }));
+    
+    // Sắp xếp theo ngày (mới nhất trước)
+    result.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    // Chỉ lấy 7 ngày gần nhất
+    return result.slice(0, 7);
+  };
+  
+  const dailyStats = createDailyStats();
+  const maxDailyWords = dailyStats.length > 0 ? 
+    Math.max(...dailyStats.map(day => day.count)) : 10;
   
   return (
     <Box
@@ -103,8 +183,17 @@ const ProgressPage = () => {
             Tiến độ học tập
           </Heading>
           
-          {isLoading ? (
+          {/* Hiển thị lỗi nếu có */}
+          {(progressError || vocabStatsError || error) && (
+            <Alert status="error" borderRadius="md">
+              <AlertIcon />
+              <Text>{progressError || vocabStatsError || error}</Text>
+            </Alert>
+          )}
+          
+          {isLoading || isProgressLoading || isVocabStatsLoading ? (
             <Flex justify="center" py={10}>
+              <Spinner size="xl" color="blue.500" mr={2} />
               <Text>Đang tải dữ liệu tiến độ...</Text>
             </Flex>
           ) : (
@@ -123,106 +212,177 @@ const ProgressPage = () => {
                     <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6}>
                       <ProgressChart
                         title="Từ vựng đã học"
-                        value={overallProgress.learned_words}
-                        max={overallProgress.total_words}
+                        value={overallProgress?.vocabulary?.total_learned || 0}
+                        max={overallProgress?.vocabulary?.total || 1}
                         color="blue.500"
+                        icon={<FaBookOpen />}
                       />
                       
                       <ProgressChart
                         title="Từ vựng đã nhớ"
-                        value={overallProgress.memorized_words}
-                        max={overallProgress.learned_words}
+                        value={overallProgress?.vocabulary?.total_memorized || 0}
+                        max={overallProgress?.vocabulary?.total_learned || 1}
                         color="green.500"
+                        icon={<FaStar />}
                       />
                       
                       <ProgressChart
                         title="Bài học hoàn thành"
-                        value={overallProgress.completed_lessons}
-                        max={overallProgress.total_lessons}
+                        value={overallProgress?.lessons?.completed || 0}
+                        max={overallProgress?.lessons?.total || 1}
                         color="purple.500"
+                        icon={<FaBook />}
                       />
                     </SimpleGrid>
                     
-                    {/* Thông tin chi tiết */}
-                    <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6}>
-                      <Stat
-                        bg={cardBg}
-                        p={6}
-                        borderRadius="lg"
-                        borderWidth="1px"
-                        borderColor={borderColor}
-                        boxShadow="md"
-                      >
-                        <StatLabel>Số ngày học liên tục</StatLabel>
-                        <StatNumber>{overallProgress.streak_days} ngày</StatNumber>
-                        <StatHelpText>Duy trì liên tục từ {overallProgress.streak_start_date}</StatHelpText>
-                      </Stat>
-                      
-                      <Stat
-                        bg={cardBg}
-                        p={6}
-                        borderRadius="lg"
-                        borderWidth="1px"
-                        borderColor={borderColor}
-                        boxShadow="md"
-                      >
-                        <StatLabel>Tổng thời gian học</StatLabel>
-                        <StatNumber>{overallProgress.total_study_time} giờ</StatNumber>
-                        <StatHelpText>Lần học gần nhất: {overallProgress.last_study_date}</StatHelpText>
-                      </Stat>
-                      
-                      <Stat
-                        bg={cardBg}
-                        p={6}
-                        borderRadius="lg"
-                        borderWidth="1px"
-                        borderColor={borderColor}
-                        boxShadow="md"
-                      >
-                        <StatLabel>Hiệu suất ghi nhớ</StatLabel>
-                        <StatNumber>{overallProgress.memory_efficiency}%</StatNumber>
-                        <StatHelpText>Tăng {overallProgress.memory_efficiency_change}% trong tuần qua</StatHelpText>
-                      </Stat>
-                    </SimpleGrid>
+                    {/* Tiến độ tổng thể */}
+                    <Card bg={cardBg} boxShadow="md">
+                      <CardHeader pb={0}>
+                        <Heading size="md">Tiến độ tổng thể</Heading>
+                      </CardHeader>
+                      <CardBody>
+                        <HStack spacing={6} align="center">
+                          <CircularProgress 
+                            value={overallProgress?.overall_percentage || 0} 
+                            color="blue.500" 
+                            size="100px" 
+                            thickness="10px"
+                          >
+                            <CircularProgressLabel>
+                              {Math.round(overallProgress?.overall_percentage || 0)}%
+                            </CircularProgressLabel>
+                          </CircularProgress>
+                          
+                          <VStack align="start" spacing={2} flex="1">
+                            <Box w="100%">
+                              <Flex justify="space-between" mb={1}>
+                                <Text>Từ vựng</Text>
+                                <Text fontWeight="medium">{overallProgress?.vocabulary?.percentage || 0}%</Text>
+                              </Flex>
+                              <Progress 
+                                value={overallProgress?.vocabulary?.percentage || 0}
+                                colorScheme="blue"
+                                size="sm"
+                                borderRadius="full"
+                              />
+                            </Box>
+                            
+                            <Box w="100%">
+                              <Flex justify="space-between" mb={1}>
+                                <Text>Bài học</Text>
+                                <Text fontWeight="medium">{overallProgress?.lessons?.percentage || 0}%</Text>
+                              </Flex>
+                              <Progress 
+                                value={overallProgress?.lessons?.percentage || 0}
+                                colorScheme="green"
+                                size="sm"
+                                borderRadius="full"
+                              />
+                            </Box>
+                            
+                            <Box w="100%">
+                              <Flex justify="space-between" mb={1}>
+                                <Text>Chủ đề</Text>
+                                <Text fontWeight="medium">{overallProgress?.topics?.percentage || 0}%</Text>
+                              </Flex>
+                              <Progress 
+                                value={overallProgress?.topics?.percentage || 0}
+                                colorScheme="purple"
+                                size="sm"
+                                borderRadius="full"
+                              />
+                            </Box>
+                          </VStack>
+                        </HStack>
+                      </CardBody>
+                    </Card>
+                    
+                    {/* Bài học đã hoàn thành gần đây - Đã cập nhật màu nền theo theme */}
+                    <Card bg={cardBg} boxShadow="md">
+                      <CardHeader pb={0}>
+                        <Heading size="md">Bài học đã hoàn thành gần đây</Heading>
+                      </CardHeader>
+                      <CardBody>
+                        <VStack spacing={2} align="stretch">
+                          {completedLessons && completedLessons.length > 0 ? (
+                            completedLessons.slice(0, 5).map(lesson => (
+                              <Box key={lesson.lesson_id} p={2} borderRadius="md" bg={completedLessonBg} _dark={{ bg: 'gray.700' }}>
+                                <Flex justify="space-between">
+                                  <Text fontWeight="medium">{lesson.title}</Text>
+                                  <Text fontSize="sm" color={completedLessonText}>
+                                    {new Date(lesson.completion_date).toLocaleDateString()}
+                                  </Text>
+                                </Flex>
+                              </Box>
+                            ))
+                          ) : (
+                            <Text color={completedLessonText}>
+                              Bạn chưa hoàn thành bài học nào. Hãy bắt đầu học!
+                            </Text>
+                          )}
+                        </VStack>
+                      </CardBody>
+                    </Card>
                   </VStack>
                 </TabPanel>
                 
                 {/* Tab Chủ đề */}
                 <TabPanel>
                   <VStack spacing={4} align="stretch">
-                    {topicProgress.map(topic => (
-                      <Box
-                        key={topic.topic_id}
+                    {topicProgress && topicProgress.length > 0 ? (
+                      topicProgress.map(topic => (
+                        <Box
+                          key={topic.topic_id}
+                          bg={cardBg}
+                          p={5}
+                          borderRadius="lg"
+                          borderWidth="1px"
+                          borderColor={borderColor}
+                          boxShadow="md"
+                        >
+                          <Flex justify="space-between" align="center" mb={2}>
+                            <Heading size="sm">{topic.topic_name}</Heading>
+                            <Badge 
+                              colorScheme={topic.completed_percentage >= 95 ? "green" : "blue"}
+                              p={1}
+                              borderRadius="md"
+                            >
+                              {topic.completed_percentage}%
+                            </Badge>
+                          </Flex>
+                          
+                          <Progress
+                            value={topic.completed_percentage}
+                            colorScheme={topic.completed_percentage >= 95 ? "green" : "blue"}
+                            size="sm"
+                            borderRadius="full"
+                            mb={3}
+                          />
+                          
+                          <HStack fontSize="sm" color={useColorModeValue('gray.500', 'gray.400')} justify="space-between">
+                            <Text>{topic.completed_lessons} / {topic.total_lessons} bài học</Text>
+                            <Divider orientation="vertical" h="20px" />
+                            <Text>{topic.vocabulary_count || 0} từ vựng</Text>
+                          </HStack>
+                        </Box>
+                      ))
+                    ) : (
+                      <Box 
                         bg={cardBg}
                         p={5}
                         borderRadius="lg"
                         borderWidth="1px"
                         borderColor={borderColor}
                         boxShadow="md"
+                        textAlign="center"
                       >
-                        <Flex justify="space-between" mb={2}>
-                          <Heading size="sm">{topic.topic_name}</Heading>
-                          <Text fontWeight="bold">{topic.completed_percentage}%</Text>
-                        </Flex>
-                        
-                        <Progress
-                          value={topic.completed_percentage}
-                          colorScheme="blue"
-                          size="sm"
-                          borderRadius="full"
-                          mb={3}
-                        />
-                        
-                        <HStack fontSize="sm" color="gray.500" justify="space-between">
-                          <Text>{topic.completed_lessons} / {topic.total_lessons} bài học</Text>
-                          <Text>{topic.memorized_words} / {topic.total_words} từ vựng</Text>
-                        </HStack>
+                        <Text color={useColorModeValue('gray.500', 'gray.400')}>Chưa có dữ liệu tiến độ cho chủ đề nào.</Text>
                       </Box>
-                    ))}
+                    )}
                   </VStack>
                 </TabPanel>
                 
-                {/* Tab Thống kê */}
+                {/* Tab Thống kê - Đã xóa phần "Tóm tắt tiến độ" */}
                 <TabPanel>
                   <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
                     <Box
@@ -235,20 +395,24 @@ const ProgressPage = () => {
                     >
                       <Heading size="md" mb={4}>Số từ học mỗi ngày</Heading>
                       <VStack spacing={3} align="stretch">
-                        {weeklyStats.daily_words.map((day, index) => (
-                          <Box key={index}>
-                            <Flex justify="space-between" mb={1}>
-                              <Text fontSize="sm">{day.date}</Text>
-                              <Text fontSize="sm" fontWeight="bold">{day.count} từ</Text>
-                            </Flex>
-                            <Progress 
-                              value={(day.count / weeklyStats.max_daily_words) * 100} 
-                              colorScheme="blue" 
-                              size="sm" 
-                              borderRadius="full" 
-                            />
-                          </Box>
-                        ))}
+                        {dailyStats.length > 0 ? (
+                          dailyStats.map((day, index) => (
+                            <Box key={index}>
+                              <Flex justify="space-between" mb={1}>
+                                <Text fontSize="sm">{day.date}</Text>
+                                <Text fontSize="sm" fontWeight="bold">{day.count} từ</Text>
+                              </Flex>
+                              <Progress 
+                                value={(day.count / maxDailyWords) * 100} 
+                                colorScheme="blue" 
+                                size="sm" 
+                                borderRadius="full" 
+                              />
+                            </Box>
+                          ))
+                        ) : (
+                          <Text color={useColorModeValue('gray.500', 'gray.400')}>Chưa có dữ liệu học tập theo ngày.</Text>
+                        )}
                       </VStack>
                     </Box>
                     
@@ -260,79 +424,28 @@ const ProgressPage = () => {
                       borderColor={borderColor}
                       boxShadow="md"
                     >
-                      <Heading size="md" mb={4}>Thời gian học mỗi ngày</Heading>
+                      <Heading size="md" mb={4}>Số từ đã thuộc theo loại</Heading>
                       <VStack spacing={3} align="stretch">
-                        {weeklyStats.daily_time.map((day, index) => (
-                          <Box key={index}>
-                            <Flex justify="space-between" mb={1}>
-                              <Text fontSize="sm">{day.date}</Text>
-                              <Text fontSize="sm" fontWeight="bold">{day.minutes} phút</Text>
-                            </Flex>
-                            <Progress 
-                              value={(day.minutes / weeklyStats.max_daily_time) * 100} 
-                              colorScheme="green" 
-                              size="sm" 
-                              borderRadius="full" 
-                            />
-                          </Box>
-                        ))}
-                      </VStack>
-                    </Box>
-                    
-                    <Box
-                      bg={cardBg}
-                      p={6}
-                      borderRadius="lg"
-                      borderWidth="1px"
-                      borderColor={borderColor}
-                      boxShadow="md"
-                    >
-                      <Heading size="md" mb={4}>Số từ đã nhớ theo loại</Heading>
-                      <VStack spacing={3} align="stretch">
-                        {weeklyStats.words_by_type.map((type, index) => (
-                          <Box key={index}>
-                            <Flex justify="space-between" mb={1}>
-                              <Text fontSize="sm">{type.type}</Text>
-                              <Text fontSize="sm" fontWeight="bold">{type.memorized} / {type.total}</Text>
-                            </Flex>
-                            <Progress 
-                              value={(type.memorized / type.total) * 100} 
-                              colorScheme="purple" 
-                              size="sm" 
-                              borderRadius="full" 
-                            />
-                          </Box>
-                        ))}
-                      </VStack>
-                    </Box>
-                    
-                    <Box
-                      bg={cardBg}
-                      p={6}
-                      borderRadius="lg"
-                      borderWidth="1px"
-                      borderColor={borderColor}
-                      boxShadow="md"
-                    >
-                      <Heading size="md" mb={4}>Hiệu suất theo độ khó</Heading>
-                      <VStack spacing={3} align="stretch">
-                        {weeklyStats.efficiency_by_difficulty.map((diff, index) => (
-                          <Box key={index}>
-                            <Flex justify="space-between" mb={1}>
-                              <Text fontSize="sm">{diff.difficulty}</Text>
-                              <Text fontSize="sm" fontWeight="bold">{diff.efficiency}%</Text>
-                            </Flex>
-                            <Progress 
-                              value={diff.efficiency} 
-                              colorScheme={
-                                diff.difficulty === 'Easy' ? 'green' :
-                                diff.difficulty === 'Medium' ? 'yellow' : 'red'
-                              }
-                              size="sm" 
-                              borderRadius="full" 
-                            />
-                          </Box>
-                        ))}
+                        {vocabularyStatsByType && vocabularyStatsByType.length > 0 ? (
+                          vocabularyStatsByType.map((typeData, index) => (
+                            <Box key={index}>
+                              <Flex justify="space-between" mb={1}>
+                                <Text fontSize="sm">{typeData.type}</Text>
+                                <Text fontSize="sm" fontWeight="bold">
+                                  {typeData.memorized} / {typeData.total} từ
+                                </Text>
+                              </Flex>
+                              <Progress 
+                                value={(typeData.memorized / typeData.total) * 100} 
+                                colorScheme="purple" 
+                                size="sm" 
+                                borderRadius="full" 
+                              />
+                            </Box>
+                          ))
+                        ) : (
+                          <Text color={useColorModeValue('gray.500', 'gray.400')}>Chưa có dữ liệu từ vựng theo loại.</Text>
+                        )}
                       </VStack>
                     </Box>
                   </SimpleGrid>
@@ -346,4 +459,4 @@ const ProgressPage = () => {
   );
 };
 
-export default ProgressPage;                   
+export default ProgressPage;
