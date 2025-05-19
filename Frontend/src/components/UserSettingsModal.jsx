@@ -1,5 +1,4 @@
-// Modal cài đặt tài khoản người dùng
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal,
   ModalOverlay,
@@ -14,15 +13,26 @@ import {
   Input,
   Avatar,
   Flex,
-  Box,
-  useToast
+  useToast,
+  useColorModeValue,
+  HStack,
+  IconButton
 } from '@chakra-ui/react';
+import { CalendarIcon } from '@chakra-ui/icons';
 import useAuthStore from '../store/authStore';
+import {
+  formatDateInput,
+  convertToISODate,
+  formatToDDMMYYYY,
+  formatToNativeDate
+} from '../utils/dateHelpers';
 
 const UserSettingsModal = ({ isOpen, onClose }) => {
   const { user, updateUserProfile } = useAuthStore();
   const toast = useToast();
-  
+  const readOnlyBg = useColorModeValue('gray.100', 'gray.600');
+  const hiddenDateRef = useRef(null);
+
   const [formData, setFormData] = useState({
     display_name: '',
     email: '',
@@ -31,7 +41,9 @@ const UserSettingsModal = ({ isOpen, onClose }) => {
     address: '',
     profile_picture: ''
   });
-  
+
+  const [tempDate, setTempDate] = useState('');
+
   useEffect(() => {
     if (user) {
       setFormData({
@@ -42,16 +54,43 @@ const UserSettingsModal = ({ isOpen, onClose }) => {
         address: user.address || '',
         profile_picture: user.profile_picture || ''
       });
+      setTempDate(user.birth_date ? formatToDDMMYYYY(user.birth_date) : '');
     }
   }, [user, isOpen]);
-  
+
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
-  
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData({ ...formData, profile_picture: reader.result });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleTextDateChange = (e) => {
+    const formatted = formatDateInput(e.target.value);
+    setTempDate(formatted);
+
+    if (formatted.length === 10) {
+      const iso = convertToISODate(formatted);
+      if (iso) {
+        setFormData({ ...formData, birth_date: iso });
+      }
+    }
+  };
+
+  const handleDatePick = (e) => {
+    const value = e.target.value;
+    setFormData({ ...formData, birth_date: value });
+    setTempDate(formatToDDMMYYYY(value));
+  };
+
   const handleSubmit = async () => {
     try {
       await updateUserProfile(formData);
@@ -72,7 +111,7 @@ const UserSettingsModal = ({ isOpen, onClose }) => {
       });
     }
   };
-  
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="md">
       <ModalOverlay />
@@ -92,6 +131,7 @@ const UserSettingsModal = ({ isOpen, onClose }) => {
               accept="image/*"
               display="none"
               id="profile-picture-upload"
+              onChange={handleImageChange}
             />
             <Button
               as="label"
@@ -102,7 +142,7 @@ const UserSettingsModal = ({ isOpen, onClose }) => {
               Thay đổi ảnh đại diện
             </Button>
           </Flex>
-          
+
           <FormControl mb={3}>
             <FormLabel>Tên hiển thị</FormLabel>
             <Input
@@ -111,7 +151,7 @@ const UserSettingsModal = ({ isOpen, onClose }) => {
               onChange={handleChange}
             />
           </FormControl>
-          
+
           <FormControl mb={3}>
             <FormLabel>Email</FormLabel>
             <Input
@@ -119,10 +159,10 @@ const UserSettingsModal = ({ isOpen, onClose }) => {
               value={formData.email}
               onChange={handleChange}
               isReadOnly
-              bg="gray.100"
+              bg={readOnlyBg}
             />
           </FormControl>
-          
+
           <FormControl mb={3}>
             <FormLabel>Họ và tên</FormLabel>
             <Input
@@ -131,17 +171,31 @@ const UserSettingsModal = ({ isOpen, onClose }) => {
               onChange={handleChange}
             />
           </FormControl>
-          
+
           <FormControl mb={3}>
             <FormLabel>Ngày sinh</FormLabel>
-            <Input
-              name="birth_date"
-              type="date"
-              value={formData.birth_date}
-              onChange={handleChange}
-            />
+            <HStack>
+              <Input
+                type="text"
+                placeholder="dd/mm/yyyy"
+                value={tempDate}
+                onChange={handleTextDateChange}
+              />
+              <IconButton
+                icon={<CalendarIcon />}
+                onClick={() => hiddenDateRef.current?.showPicker()}
+                aria-label="Chọn ngày"
+              />
+              <Input
+                type="date"
+                ref={hiddenDateRef}
+                onChange={handleDatePick}
+                value={formData.birth_date}
+                display="none"
+              />
+            </HStack>
           </FormControl>
-          
+
           <FormControl mb={3}>
             <FormLabel>Địa chỉ</FormLabel>
             <Input

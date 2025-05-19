@@ -131,6 +131,51 @@ const useVocabularyStore = create((set, get) => ({
     }
   },
   
+  fetchSimilarWords: async (vocabId, wordType, limit = 5) => {
+    set({ isLoading: true, error: null });
+    try {
+      // Tạo URL cho API endpoint
+      const url = `/similar-words?vocab_id=${vocabId}&word_type=${encodeURIComponent(wordType)}&limit=${limit}`;
+      
+      // Gọi API
+      const response = await axiosClient.get(url);
+      console.log("Similar words API response:", response); // Log kiểm tra
+      
+      // Xử lý response
+      if (response && response.data) {
+        // Kiểm tra cấu trúc phản hồi
+        if (response.data.status === 200 && response.data.data) {
+          // Đúng cấu trúc API có status và data
+          const wordsData = response.data.data || [];
+          set({ isLoading: false });
+          return wordsData;
+        } else if (Array.isArray(response.data)) {
+          // API trả về trực tiếp là mảng
+          set({ isLoading: false });
+          return response.data;
+        } else {
+          // Có dữ liệu nhưng không đúng định dạng
+          console.warn("API trả về dữ liệu không đúng định dạng:", response.data);
+          set({ 
+            isLoading: false,
+            error: "Dữ liệu không đúng định dạng" 
+          });
+          return [];
+        }
+      } else {
+        // Không có dữ liệu trả về
+        throw new Error('Không có dữ liệu từ vựng tương tự trả về từ API');
+      }
+    } catch (error) {
+      console.error("Lỗi khi lấy từ vựng tương tự:", error);
+      set({ 
+        error: error.message || 'Không thể lấy từ vựng tương tự', 
+        isLoading: false
+      });
+      return []; // Trả về mảng rỗng khi có lỗi
+    }
+  },
+    
   // Lấy từ vựng của bài học
   fetchLessonVocabulary: async (lessonId) => {
     set({ isLoading: true, error: null });

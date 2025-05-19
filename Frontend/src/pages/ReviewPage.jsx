@@ -1,4 +1,4 @@
-// src/pages/ReviewPage.jsx
+// src/pages/ReviewPage.jsx - Đã cập nhật với mô hình tách rời
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Box,
@@ -6,46 +6,36 @@ import {
   Heading,
   Text,
   Button,
-  HStack,
-  VStack,
   Flex,
-  IconButton,
   useToast,
   useColorModeValue,
   Grid,
   GridItem,
   Badge,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalBody,
-  useDisclosure
+  useDisclosure,
+  VStack
 } from '@chakra-ui/react';
-import { ChevronLeftIcon, ChevronRightIcon } from '@chakra-ui/icons';
 import { Link } from 'react-router-dom';
-import ReviewExercise from '../components/ReviewExercise';
+import ReviewModal from '../components/ReviewModal';
 import ReviewChart from '../components/ReviewChart';
 import useVocabularyStore from '../store/vocabularyStore';
-import axiosClient from '../api/axiosClient';
 
 const ReviewPage = () => {
   const {
     reviewVocabulary,
-    currentVocabIndex,
     fetchReviewVocabulary,
-    nextVocabulary,
-    previousVocabulary,
     markVocabularyStatus,
-    skipCurrentWord,
-    isLoading,
-    error,
-    hasNoWordsToReview
+    hasNoWordsToReview,
+    setCurrentVocabIndex
   } = useVocabularyStore();
   
   const [recentWords, setRecentWords] = useState([]); // Từ vựng học 2 ngày gần đây
   const [isLoadingRecent, setIsLoadingRecent] = useState(false);
-  const [chartKey, setChartKey] = useState(Date.now()); // Thêm state để refresh chart
-  const { isOpen, onOpen, onClose } = useDisclosure(); // Modal cho ReviewExercise
+  const [chartKey, setChartKey] = useState(Date.now()); // Key để refresh chart
+  const [isExerciseInProgress, setIsExerciseInProgress] = useState(false); // Theo dõi trạng thái đang làm bài
+  
+  // Sử dụng useDisclosure của Chakra UI để quản lý trạng thái modal
+  const { isOpen, onOpen, onClose: closeModal } = useDisclosure();
   
   const toast = useToast();
   const bgGradient = useColorModeValue(
@@ -55,7 +45,7 @@ const ReviewPage = () => {
   const cardBg = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   
-  // Tách hàm fetchRecentVocabulary ra thành một callback riêng để có thể gọi lại
+  // Tách hàm fetchRecentVocabulary ra thành callback riêng để có thể gọi lại
   const fetchRecentVocabulary = useCallback(async () => {
     try {
       setIsLoadingRecent(true);
@@ -98,18 +88,27 @@ const ReviewPage = () => {
   // Xử lý đánh dấu từ vựng chưa thuộc
   const handleMarkNotMemorized = async (vocabId) => {
     try {
-      await markVocabularyStatus(vocabId, false);
-      toast({
-        title: 'Đã đánh dấu từ vựng',
-        description: "Từ vựng đã được đánh dấu là chưa nhớ.",
-        status: 'info',
-        duration: 2000,
-        isClosable: true,
-      });
+      // Log để debug
+      console.log('ReviewPage - handleMarkNotMemorized called for vocab ID:', vocabId);
       
-      // Chuyển sang từ tiếp theo
-      nextVocabulary();
+      // Cập nhật trạng thái từ vựng là chưa thuộc
+      await markVocabularyStatus(vocabId, false);
+      
+      // Force refresh biểu đồ
+      setTimeout(() => {
+        setChartKey(Date.now());
+        
+        // Thử refresh chart bằng cách gọi hàm refreshData nếu có
+        if (document.querySelector('.recharts-responsive-container')) {
+          const chartElement = document.querySelector('.recharts-responsive-container');
+          if (chartElement && chartElement.parentNode && typeof chartElement.parentNode.refreshData === 'function') {
+            chartElement.parentNode.refreshData();
+          }
+        }
+      }, 300);
+      
     } catch (error) {
+      console.error('Error updating vocabulary status:', error);
       toast({
         title: 'Lỗi',
         description: 'Không thể cập nhật trạng thái từ vựng.',
@@ -120,61 +119,30 @@ const ReviewPage = () => {
     }
   };
   
-  // Xử lý bỏ qua từ hiện tại
-  const handleSkip = () => {
-    skipCurrentWord();
-    toast({
-      title: 'Đã bỏ qua',
-      description: "Đã bỏ qua từ vựng này.",
-      status: 'info',
-      duration: 1000,
-      isClosable: true,
-    });
-  };
-  
   // Xử lý hoàn thành bài tập
   const handleExerciseComplete = async (vocabId, isCorrect) => {
     try {
-      // Đánh dấu từ vựng là đã thuộc nếu trả lời đúng
-      if (isCorrect) {
-        await markVocabularyStatus(vocabId, true);
-      } else {
-        // Nếu trả lời sai, vẫn cập nhật review_count
-        await markVocabularyStatus(vocabId, false);
-      }
+      // Log để debug
+      console.log('ReviewPage - handleExerciseComplete called for vocab ID:', vocabId, 'isCorrect:', isCorrect);
+      
+      // Đánh dấu từ vựng là đã thuộc nếu trả lời đúng, chưa thuộc nếu trả lời sai
+      await markVocabularyStatus(vocabId, isCorrect);
       
       // Cập nhật lại danh sách từ vựng gần đây để hiển thị đúng số lượng
       await fetchRecentVocabulary();
       
       // Force refresh biểu đồ
-      setChartKey(Date.now());
-      
-      // Chuyển sang từ tiếp theo
       setTimeout(() => {
-        // Kiểm tra xem còn từ nào cần ôn tập không
-        const remainingWords = reviewVocabulary.filter(
-          (word, index) => index > currentVocabIndex && word.review_count < 2
-        );
+        setChartKey(Date.now());
         
-        if (remainingWords.length === 0 && currentVocabIndex === reviewVocabulary.length - 1) {
-          // Nếu đã ôn tập hết tất cả các từ
-          toast({
-            title: 'Hoàn thành ôn tập',
-            description: 'Bạn đã ôn tập xong tất cả các từ!',
-            status: 'success',
-            duration: 2000,
-            isClosable: true,
-          });
-          
-          // Đóng modal
-          onClose();
-          
-          // Cập nhật lại danh sách từ vựng
-          fetchReviewVocabulary();
-        } else {
-          nextVocabulary();
+        // Thử refresh chart bằng cách gọi hàm refreshData nếu có
+        if (document.querySelector('.recharts-responsive-container')) {
+          const chartElement = document.querySelector('.recharts-responsive-container');
+          if (chartElement && chartElement.parentNode && typeof chartElement.parentNode.refreshData === 'function') {
+            chartElement.parentNode.refreshData();
+          }
         }
-      }, 500);
+      }, 300);
     } catch (error) {
       console.error('Error updating vocabulary status:', error);
       toast({
@@ -221,12 +189,42 @@ const ReviewPage = () => {
       isClosable: true,
     });
     
+    // Đánh dấu bắt đầu bài tập
+    setIsExerciseInProgress(true);
+    
     // Mở modal
     onOpen();
   };
+  
+  // Xử lý đóng modal
+  const handleCloseModal = () => {
+    // Log để debug
+    console.log('ReviewPage - handleCloseModal called');
     
-  // Kiểm tra từ hiện tại
-  const currentWord = reviewVocabulary[currentVocabIndex];
+    // Chỉ cập nhật trạng thái nếu đã bắt đầu làm bài
+    if (isExerciseInProgress) {
+      closeModal();
+      
+      // Cập nhật lại danh sách từ vựng
+      fetchReviewVocabulary();
+      
+      // Cập nhật lại danh sách từ vựng gần đây
+      fetchRecentVocabulary();
+      
+      // Force refresh biểu đồ
+      setChartKey(Date.now());
+      
+      // Reset trạng thái làm bài
+      setIsExerciseInProgress(false);
+      
+      // Reset index về 0
+      setCurrentVocabIndex(0);
+    } else {
+      // Nếu chưa bắt đầu làm bài, chỉ đóng modal
+      closeModal();
+    }
+  };
+  
   const hasWords = reviewVocabulary.length > 0 && !hasNoWordsToReview;
   const hasRecentWords = recentWords.length > 0;
   
@@ -270,7 +268,6 @@ const ReviewPage = () => {
                   <VStack align="start" spacing={4}>
                     <Heading size="md">Từ vựng cần ôn tập</Heading>
                     
-                    {/* Thay đổi cách hiển thị để rõ ràng hơn */}
                     <Text>Tổng từ trong 2 ngày: <Badge colorScheme="blue" fontSize="md">{recentWords.length}</Badge></Text>
                     <Text>Tổng từ cần ôn tập: <Badge colorScheme="purple" fontSize="md">
                       {recentWords.filter(word => word.review_count < 2).length}
@@ -308,50 +305,14 @@ const ReviewPage = () => {
           )}
         </VStack>
         
-        {/* Modal hiển thị bài tập ôn tập */}
-        <Modal isOpen={isOpen} onClose={onClose} size="xl" isCentered scrollBehavior="inside">
-          <ModalOverlay />
-          <ModalContent>
-            <ModalBody p={0} borderRadius="lg">
-              {currentWord && (
-                <Box position="relative">
-                  <ReviewExercise 
-                    vocabulary={currentWord}
-                    onComplete={handleExerciseComplete}
-                    onMarkNotMemorized={handleMarkNotMemorized}
-                    options={reviewVocabulary}
-                    key={currentVocabIndex} // Thêm key để component được tạo mới khi chuyển từ
-                  />
-                  
-                  {/* Nút điều hướng */}
-                  <HStack spacing={4} justify="center" mt={4} mb={6}>
-                    <IconButton
-                      icon={<ChevronLeftIcon boxSize={6} />}
-                      colorScheme="gray"
-                      variant="outline"
-                      isDisabled={currentVocabIndex === 0}
-                      onClick={previousVocabulary}
-                      aria-label="Từ trước đó"
-                    />
-                    
-                    <Text mx={2}>
-                      {currentVocabIndex + 1} / {reviewVocabulary.length}
-                    </Text>
-                    
-                    <IconButton
-                      icon={<ChevronRightIcon boxSize={6} />}
-                      colorScheme="gray"
-                      variant="outline"
-                      isDisabled={currentVocabIndex === reviewVocabulary.length - 1}
-                      onClick={nextVocabulary}
-                      aria-label="Từ tiếp theo"
-                    />
-                  </HStack>
-                </Box>
-              )}
-            </ModalBody>
-          </ModalContent>
-        </Modal>
+        {/* Sử dụng component ReviewModal */}
+        <ReviewModal 
+          isOpen={isOpen} 
+          onClose={handleCloseModal}
+          onCompleteExercise={handleExerciseComplete}
+          onMarkNotMemorized={handleMarkNotMemorized}
+        />
+        
       </Container>
     </Box>
   );

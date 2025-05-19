@@ -1,5 +1,4 @@
-// src/components/ReviewChart.jsx - Sửa lỗi tự động refresh
-
+// src/components/ReviewChart.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
@@ -16,6 +15,7 @@ const ReviewChart = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const intervalRef = useRef(null);
+  const chartRef = useRef(null);
 
   const barColor = useColorModeValue('#3182CE', '#63B3ED'); // blue.500 / blue.300
   const bgColor = useColorModeValue('white', 'gray.800');
@@ -57,15 +57,14 @@ const ReviewChart = () => {
     // Xóa interval cũ nếu có
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
-    
-    // Không thiết lập auto-refresh tự động nữa
-    // Thay vào đó, chỉ refresh khi có sự kiện cụ thể, hoặc khi component mount/unmount
     
     // Cleanup khi component unmount
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
   }, [fetchLearningStats]);
@@ -114,8 +113,9 @@ const ReviewChart = () => {
           backgroundColor: useColorModeValue('white', 'var(--chakra-colors-gray-800)'),
         }
       }}
-      // Gắn refreshData vào context để có thể gọi từ bên ngoài (optional)
+      // Gắn refreshData vào ref để có thể gọi từ bên ngoài
       ref={(node) => {
+        chartRef.current = node;
         if (node) {
           node.refreshData = refreshData;
         }
