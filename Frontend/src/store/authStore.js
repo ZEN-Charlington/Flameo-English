@@ -39,11 +39,45 @@ const useAuthStore = create((set, get) => {
       }
     },
 
+    // Đăng ký tài khoản mới
+    register: async (userData) => {
+      set({ isLoading: true, error: null });
+      try {
+        const response = await axiosClient.post('/register', userData);
+        
+        // Kiểm tra status trong response data
+        if (response.status && response.status !== 200 && response.status !== 201) {
+          throw new Error(response.message || 'Đăng ký thất bại');
+        }
+        
+        set({ isLoading: false });
+        return response;
+      } catch (err) {
+        console.error('Register error:', err);
+        const errorMessage = err?.response?.data?.message || err.message || 'Đăng ký thất bại';
+        set({ isLoading: false, error: errorMessage });
+        throw new Error(errorMessage);
+      }
+    },
+
+    // Đăng nhập
     login: async (email, password) => {
       set({ isLoading: true, error: null });
       try {
         const response = await axiosClient.post('/login', { email, password });
+        
+        // Kiểm tra status trong response data
+        if (response.status && response.status !== 200) {
+          throw new Error(response.message || 'Đăng nhập thất bại');
+        }
+        
         const { token, user } = response;
+        
+        // Kiểm tra có token và user không
+        if (!token || !user) {
+          throw new Error('Đăng nhập thất bại');
+        }
+        
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(user));
         set({
@@ -55,14 +89,14 @@ const useAuthStore = create((set, get) => {
         });
         return response;
       } catch (err) {
-        console.error('Login error:', err);  // Kiểm tra lỗi chi tiết
-        const errorMessage = err?.response?.data?.message || 'Đăng nhập thất bại';
+        console.error('Login error:', err);
+        const errorMessage = err?.response?.data?.message || err.message || 'Đăng nhập thất bại';
         set({ isLoading: false, error: errorMessage });
         throw new Error(errorMessage);
       }
     },
-    
 
+    // Đăng xuất
     logout: () => {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
@@ -74,6 +108,7 @@ const useAuthStore = create((set, get) => {
       });
     },
 
+    // Lấy thông tin user
     getUserInfo: async () => {
       try {
         const response = await axiosClient.get('/user-info');
@@ -86,36 +121,104 @@ const useAuthStore = create((set, get) => {
       }
     },
 
+    // === CÁC HÀM RESET PASSWORD VỚI OTP ===
+
+    // Quên mật khẩu - Gửi OTP qua email
     forgotPassword: async (email) => {
       set({ isLoading: true, error: null });
       try {
         const response = await axiosClient.post('/forgot-password', { email });
+        
+        // Kiểm tra status trong response data
+        if (response.status && response.status !== 200) {
+          throw new Error(response.message || 'Không thể gửi email khôi phục');
+        }
+        
         set({ isLoading: false });
         return response;
       } catch (err) {
-        const errorMessage = err?.response?.data?.message || 'Không thể gửi email khôi phục';
+        const errorMessage = err?.response?.data?.message || err.message || 'Không thể gửi email khôi phục';
         set({ isLoading: false, error: errorMessage });
         throw new Error(errorMessage);
       }
     },
 
-    resetPassword: async (token, password) => {
+    // Xác thực OTP
+    verifyOTP: async (otp) => {
       set({ isLoading: true, error: null });
       try {
-        const response = await axiosClient.post('/reset-password', { token, password });
+        const response = await axiosClient.post('/verify-otp', { otp });
+        
+        // Kiểm tra status trong response data
+        if (response.status && response.status !== 200) {
+          throw new Error(response.message || 'OTP không hợp lệ');
+        }
+        
         set({ isLoading: false });
         return response;
       } catch (err) {
-        const errorMessage = err?.response?.data?.message || 'Không thể đặt lại mật khẩu';
+        const errorMessage = err?.response?.data?.message || err.message || 'OTP không hợp lệ hoặc đã hết hạn';
         set({ isLoading: false, error: errorMessage });
         throw new Error(errorMessage);
       }
     },
 
+    // Đặt lại mật khẩu với OTP
+    resetPassword: async (otp, newPassword) => {
+      set({ isLoading: true, error: null });
+      try {
+        const response = await axiosClient.post('/reset-password', { 
+          otp, 
+          new_password: newPassword 
+        });
+        
+        // Kiểm tra status trong response data
+        if (response.status && response.status !== 200) {
+          // Xử lý trường hợp mật khẩu trùng với mật khẩu cũ
+          if (response.same_password) {
+            throw new Error('Mật khẩu mới không được trùng với mật khẩu cũ');
+          }
+          throw new Error(response.message || 'Không thể đặt lại mật khẩu');
+        }
+        
+        set({ isLoading: false });
+        return response;
+      } catch (err) {
+        const errorMessage = err?.response?.data?.message || err.message || 'Không thể đặt lại mật khẩu';
+        set({ isLoading: false, error: errorMessage });
+        throw new Error(errorMessage);
+      }
+    },
+
+    // === CÁC HÀM CẬP NHẬT THÔNG TIN ===
+
+    // Cập nhật thông tin user
+    updateUserInfo: async (userData) => {
+      set({ isLoading: true, error: null });
+      try {
+        const response = await axiosClient.put('/user-info', userData);
+        
+        if (response.status === 200 || response.success) {
+          // Cập nhật lại thông tin user trong store
+          await get().getUserInfo();
+          set({ isLoading: false });
+          return response;
+        } else {
+          throw new Error(response.message || 'Cập nhật thất bại');
+        }
+      } catch (err) {
+        const errorMessage = err?.response?.data?.message || 'Cập nhật thông tin user thất bại';
+        set({ isLoading: false, error: errorMessage });
+        throw new Error(errorMessage);
+      }
+    },
+
+    // Cập nhật profile
     updateProfile: async (userData) => {
       set({ isLoading: true, error: null });
       try {
         const response = await axiosClient.post('/update-profile', userData);
+        
         if (response.status === 200 || response.success) {
           await get().getUserInfo();
           set({ isLoading: false });
@@ -128,6 +231,18 @@ const useAuthStore = create((set, get) => {
         set({ isLoading: false, error: errorMessage });
         throw new Error(errorMessage);
       }
+    },
+
+    // === HÀM TIỆN ÍCH ===
+
+    // Clear error
+    clearError: () => {
+      set({ error: null });
+    },
+
+    // Set loading manually
+    setLoading: (loading) => {
+      set({ isLoading: loading });
     },
   };
 });

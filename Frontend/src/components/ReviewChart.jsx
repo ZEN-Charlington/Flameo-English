@@ -80,7 +80,7 @@ const ReviewChart = () => {
     return (
       <text 
         x={x + width / 2} 
-        y={y - 10} 
+        y={y - 15} 
         fill={barColor} 
         textAnchor="middle" 
         dominantBaseline="middle"
@@ -135,9 +135,9 @@ const ReviewChart = () => {
         <ResponsiveContainer width="100%" height={220}>
           <BarChart
             data={chartData}
-            margin={{ top: 20, right: 20, left: 10, bottom: 5 }}
+            margin={{ top: 25, right: 20, left: 10, bottom: 5 }}
           >
-            <CartesianGrid strokeDasharray="3 3" />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="date" />
             <YAxis />
             <Bar 

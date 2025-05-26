@@ -52,14 +52,6 @@ const TopicCard = ({ topic }) => {
     navigate(`/topics/${topicData.topic_id}`);
   };
   
-  // Log để debug
-  console.log('Topic data:', {
-    id: topicData.topic_id,
-    name: topicData.topic_name,
-    progress: topicData.completed_percentage,
-    origProgress: topic.completed_percentage
-  });
-  
   return (
     <Box
       as={motion.div}

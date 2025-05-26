@@ -91,7 +91,6 @@ const NotebookPage = () => {
     // Sử dụng Set để loại bỏ trùng lặp, sau đó chuyển về mảng và sắp xếp
     const uniqueTypes = [...new Set(types)].sort();
     
-    console.log('Các loại từ có trong dữ liệu:', uniqueTypes);
     return uniqueTypes;
   }, [notebookVocabulary]);
   

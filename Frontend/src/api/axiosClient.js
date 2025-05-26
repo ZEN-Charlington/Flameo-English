@@ -20,7 +20,19 @@ axiosClient.interceptors.request.use(
 );
 
 axiosClient.interceptors.response.use(
-  (response) => response.data,
+  (response) => {
+    const data = response.data;
+    if (data.status && data.status >= 400) {
+      const error = new Error(data.message || 'Request failed');
+      error.response = {
+        status: data.status,
+        data: data
+      };
+      throw error;
+    }
+    
+    return data;
+  },
   (error) => {
     if (error.response && error.response.status === 401) {
       localStorage.removeItem('token');

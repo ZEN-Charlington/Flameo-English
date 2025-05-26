@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   ModalOverlay,
@@ -11,96 +11,196 @@ import {
   FormControl,
   FormLabel,
   Input,
+  Textarea,
   Avatar,
   Flex,
   useToast,
   useColorModeValue,
+  VStack,
   HStack,
-  IconButton
+  Text,
+  Box,
+  Divider,
+  Alert,
+  AlertIcon,
+  AlertDescription,
+  Tabs,
+  TabList,
+  TabPanels,
+  Tab,
+  TabPanel,
+  Badge,
+  Image
 } from '@chakra-ui/react';
-import { CalendarIcon } from '@chakra-ui/icons';
+import { FiUser, FiSettings, FiEdit3 } from 'react-icons/fi';
 import useAuthStore from '../store/authStore';
-import {
-  formatDateInput,
-  convertToISODate,
-  formatToDDMMYYYY,
-  formatToNativeDate
-} from '../utils/dateHelpers';
+import useStudentProfileStore from '../store/studentProfileStore';
+import ImageUrlUpload from './ImageUrlUpload';
 
 const UserSettingsModal = ({ isOpen, onClose }) => {
-  const { user, updateUserProfile } = useAuthStore();
+  const { user, updateUserInfo, isLoading: userLoading } = useAuthStore();
+  const { 
+    profile, 
+    fetchProfile, 
+    createOrUpdateProfile, 
+    isLoading: profileLoading,
+    error: profileError,
+    hasProfile,
+    calculateAge
+  } = useStudentProfileStore();
+  
   const toast = useToast();
   const readOnlyBg = useColorModeValue('gray.100', 'gray.600');
-  const hiddenDateRef = useRef(null);
+  const cardBg = useColorModeValue('white', 'gray.700');
+  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const bioColor = useColorModeValue('gray.600', 'gray.400');
 
-  const [formData, setFormData] = useState({
-    display_name: '',
-    email: '',
+  // State cho User info (Users table)
+  const [userFormData, setUserFormData] = useState({
+    display_name: ''
+  });
+
+  // State cho Student Profile (StudentProfiles table)
+  const [profileFormData, setProfileFormData] = useState({
     full_name: '',
     birth_date: '',
     address: '',
-    profile_picture: ''
+    bio: ''
   });
 
-  const [tempDate, setTempDate] = useState('');
+  const [validationErrors, setValidationErrors] = useState({});
+  const [isEditingImage, setIsEditingImage] = useState(false);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState(null); // Track ảnh vừa upload
 
+  // Load dữ liệu khi modal mở
   useEffect(() => {
-    if (user) {
-      setFormData({
-        display_name: user.display_name || '',
-        email: user.email || '',
-        full_name: user.full_name || '',
-        birth_date: user.birth_date || '',
-        address: user.address || '',
-        profile_picture: user.profile_picture || ''
+    if (isOpen) {
+      // Load user info
+      if (user) {
+        setUserFormData({
+          display_name: user.display_name || ''
+        });
+      }
+
+      // Load profile info
+      fetchProfile().then((profileData) => {
+        if (profileData) {
+          let displayBirthDate = profileData.birth_date || '';
+          if (displayBirthDate) {
+            displayBirthDate = profileData.birth_date;
+          }
+          
+          setProfileFormData({
+            full_name: profileData.full_name || '',
+            birth_date: displayBirthDate,
+            address: profileData.address || '',
+            bio: profileData.bio || ''
+          });
+        } else {
+          setProfileFormData({
+            full_name: '',
+            birth_date: '',
+            address: '',
+            bio: ''
+          });
+        }
+      }).catch((error) => {
+        console.info('Profile not available:', error.message);
+        setProfileFormData({
+          full_name: '',
+          birth_date: '',
+          address: '',
+          bio: ''
+        });
       });
-      setTempDate(user.birth_date ? formatToDDMMYYYY(user.birth_date) : '');
     }
-  }, [user, isOpen]);
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    // Reset trạng thái edit khi mở/đóng modal
+    setIsEditingImage(false);
+    setUploadedImageUrl(null);
+  }, [isOpen, user, fetchProfile]);
+
+  // Handle User form changes
+  const handleUserChange = (e) => {
+    setUserFormData({ 
+      ...userFormData, 
+      [e.target.name]: e.target.value 
+    });
   };
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData({ ...formData, profile_picture: reader.result });
-      };
-      reader.readAsDataURL(file);
+  // Handle Profile form changes
+  const handleProfileChange = (e) => {
+    setProfileFormData({ 
+      ...profileFormData, 
+      [e.target.name]: e.target.value 
+    });
+    
+    // Clear validation error khi user sửa
+    if (validationErrors[e.target.name]) {
+      setValidationErrors({
+        ...validationErrors,
+        [e.target.name]: null
+      });
     }
   };
 
-  const handleTextDateChange = (e) => {
-    const formatted = formatDateInput(e.target.value);
-    setTempDate(formatted);
+  // Validate profile form
+  const validateProfileForm = () => {
+    const errors = {};
 
-    if (formatted.length === 10) {
-      const iso = convertToISODate(formatted);
-      if (iso) {
-        setFormData({ ...formData, birth_date: iso });
+    // Validate full_name
+    if (!profileFormData.full_name.trim()) {
+      errors.full_name = 'Họ và tên không được để trống';
+    } else if (profileFormData.full_name.trim().length < 2) {
+      errors.full_name = 'Họ và tên phải có ít nhất 2 ký tự';
+    } else if (profileFormData.full_name.length > 100) {
+      errors.full_name = 'Họ và tên không được quá 100 ký tự';
+    } else if (!/^[a-zA-ZÀ-ỹ\s]+$/u.test(profileFormData.full_name)) {
+      errors.full_name = 'Họ và tên chỉ được chứa chữ cái và khoảng trắng';
+    }
+
+    // Validate birth_date
+    if (profileFormData.birth_date) {
+      const birthDate = new Date(profileFormData.birth_date);
+      const today = new Date();
+      const age = today.getFullYear() - birthDate.getFullYear();
+      
+      if (isNaN(birthDate.getTime())) {
+        errors.birth_date = 'Ngày sinh không hợp lệ';
+      } else if (birthDate > today) {
+        errors.birth_date = 'Ngày sinh không thể là tương lai';
+      } else if (age < 5) {
+        errors.birth_date = 'Tuổi phải từ 5 tuổi trở lên';
+      } else if (age > 120) {
+        errors.birth_date = 'Tuổi không được quá 120 tuổi';
       }
     }
+
+    // Validate address
+    if (profileFormData.address && profileFormData.address.length > 255) {
+      errors.address = 'Địa chỉ không được quá 255 ký tự';
+    }
+
+    // Validate bio
+    if (profileFormData.bio && profileFormData.bio.length > 500) {
+      errors.bio = 'Giới thiệu bản thân không được quá 500 ký tự';
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
-  const handleDatePick = (e) => {
-    const value = e.target.value;
-    setFormData({ ...formData, birth_date: value });
-    setTempDate(formatToDDMMYYYY(value));
-  };
-
-  const handleSubmit = async () => {
+  // Submit User info
+  const handleUserSubmit = async () => {
     try {
-      await updateUserProfile(formData);
+      await updateUserInfo(userFormData);
       toast({
         title: 'Cập nhật thành công',
+        description: 'Tên hiển thị đã được cập nhật',
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
-      onClose();
     } catch (error) {
       toast({
         title: 'Lỗi khi cập nhật',
@@ -112,106 +212,291 @@ const UserSettingsModal = ({ isOpen, onClose }) => {
     }
   };
 
+  // Submit Profile info
+  const handleProfileSubmit = async () => {
+    if (!validateProfileForm()) {
+      toast({
+        title: 'Dữ liệu không hợp lệ',
+        description: 'Vui lòng kiểm tra lại thông tin',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      // Bao gồm ảnh hiện tại trong data submit
+      const submitData = {
+        ...profileFormData,
+        profile_picture: uploadedImageUrl || profile?.profile_picture || ''
+      };
+      
+      await createOrUpdateProfile(submitData);
+      toast({
+        title: 'Cập nhật thành công',
+        description: 'Thông tin cá nhân đã được cập nhật',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+      // Sau khi cập nhật thành công, tắt chế độ edit ảnh
+      setIsEditingImage(false);
+      // Reset uploaded image URL
+      setUploadedImageUrl(null);
+    } catch (error) {
+      toast({
+        title: 'Lỗi khi cập nhật',
+        description: error.message,
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
+  // Handle image URL change
+  const handleImageUrlChange = (newUrl) => {
+    setUploadedImageUrl(newUrl);
+  };
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="md">
+    <Modal isOpen={isOpen} onClose={onClose} size="xl">
       <ModalOverlay />
-      <ModalContent>
+      <ModalContent maxH="85vh">
         <ModalHeader>Cài đặt tài khoản</ModalHeader>
         <ModalCloseButton />
-        <ModalBody>
-          <Flex direction="column" align="center" mb={4}>
-            <Avatar
-              size="xl"
-              name={formData.display_name}
-              src={formData.profile_picture}
-              mb={3}
-            />
-            <Input
-              type="file"
-              accept="image/*"
-              display="none"
-              id="profile-picture-upload"
-              onChange={handleImageChange}
-            />
-            <Button
-              as="label"
-              htmlFor="profile-picture-upload"
-              size="sm"
-              colorScheme="blue"
-            >
-              Thay đổi ảnh đại diện
-            </Button>
-          </Flex>
+        <ModalBody overflowY="auto">
+          <Tabs variant="enclosed">
+            <TabList>
+              <Tab>
+                <HStack spacing={2}>
+                  <FiUser />
+                  <Text>Thông tin tài khoản</Text>
+                </HStack>
+              </Tab>
+              <Tab>
+                <HStack spacing={2}>
+                  <FiSettings />
+                  <Text>Thông tin cá nhân</Text>
+                  {!hasProfile() && <Badge ml={2} colorScheme="orange" fontSize="xs">Chưa có</Badge>}
+                </HStack>
+              </Tab>
+            </TabList>
 
-          <FormControl mb={3}>
-            <FormLabel>Tên hiển thị</FormLabel>
-            <Input
-              name="display_name"
-              value={formData.display_name}
-              onChange={handleChange}
-            />
-          </FormControl>
+            <TabPanels>
+              {/* Tab 1: User Account Info */}
+              <TabPanel>
+                <VStack spacing={4} align="stretch">
+                  <Box p={4} bg={cardBg} borderRadius="md" borderWidth="1px" borderColor={borderColor}>
+                    <Text fontWeight="bold" mb={3}>Thông tin đăng nhập</Text>
+                    
+                    <FormControl mb={3}>
+                      <FormLabel>Email</FormLabel>
+                      <Input
+                        value={user?.email || ''}
+                        isReadOnly
+                        bg={readOnlyBg}
+                      />
+                      <Text fontSize="xs" color="gray.500" mt={1}>
+                        Email không thể thay đổi
+                      </Text>
+                    </FormControl>
 
-          <FormControl mb={3}>
-            <FormLabel>Email</FormLabel>
-            <Input
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              isReadOnly
-              bg={readOnlyBg}
-            />
-          </FormControl>
+                    <FormControl mb={4}>
+                      <FormLabel>Tên hiển thị</FormLabel>
+                      <Input
+                        name="display_name"
+                        value={userFormData.display_name}
+                        onChange={handleUserChange}
+                        placeholder="Nhập tên hiển thị..."
+                      />
+                      <Text fontSize="xs" color="gray.500" mt={1}>
+                        Tên này sẽ hiển thị trên navbar và các nơi khác
+                      </Text>
+                    </FormControl>
 
-          <FormControl mb={3}>
-            <FormLabel>Họ và tên</FormLabel>
-            <Input
-              name="full_name"
-              value={formData.full_name}
-              onChange={handleChange}
-            />
-          </FormControl>
+                    <HStack justify="flex-end">
+                      <Button
+                        colorScheme="blue"
+                        onClick={handleUserSubmit}
+                        isLoading={userLoading}
+                        size="sm"
+                      >
+                        Lưu thay đổi
+                      </Button>
+                    </HStack>
+                  </Box>
 
-          <FormControl mb={3}>
-            <FormLabel>Ngày sinh</FormLabel>
-            <HStack>
-              <Input
-                type="text"
-                placeholder="dd/mm/yyyy"
-                value={tempDate}
-                onChange={handleTextDateChange}
-              />
-              <IconButton
-                icon={<CalendarIcon />}
-                onClick={() => hiddenDateRef.current?.showPicker()}
-                aria-label="Chọn ngày"
-              />
-              <Input
-                type="date"
-                ref={hiddenDateRef}
-                onChange={handleDatePick}
-                value={formData.birth_date}
-                display="none"
-              />
-            </HStack>
-          </FormControl>
+                  <Box p={4} bg={cardBg} borderRadius="md" borderWidth="1px" borderColor={borderColor}>
+                    <Text fontWeight="bold" mb={3}>Thông tin hệ thống</Text>
+                    <VStack align="start" spacing={2}>
+                      <Text fontSize="sm">
+                        <strong>ID:</strong> {user?.user_id}
+                      </Text>
+                      <Text fontSize="sm">
+                        <strong>Vai trò:</strong> {user?.role || 'student'}
+                      </Text>
+                      <Text fontSize="sm">
+                        <strong>Ngày tạo:</strong> {user?.created_at ? new Date(user.created_at).toLocaleDateString('vi-VN', {
+                          day: '2-digit',
+                          month: '2-digit', 
+                          year: 'numeric'
+                        }) : 'N/A'}
+                      </Text>
+                    </VStack>
+                  </Box>
+                </VStack>
+              </TabPanel>
 
-          <FormControl mb={3}>
-            <FormLabel>Địa chỉ</FormLabel>
-            <Input
-              name="address"
-              value={formData.address}
-              onChange={handleChange}
-            />
-          </FormControl>
+              {/* Tab 2: Student Profile */}
+              <TabPanel>
+                <VStack spacing={4} align="stretch">
+                  {/* Profile Status */}
+                  {!hasProfile() && (
+                    <Alert status="info" borderRadius="md">
+                      <AlertIcon />
+                      <AlertDescription>
+                        Bạn chưa có thông tin cá nhân. Hãy điền thông tin để hoàn thiện hồ sơ!
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {/* Profile Picture */}
+                  <Box p={4} bg={cardBg} borderRadius="md" borderWidth="1px" borderColor={borderColor}>
+                    <Text fontWeight="bold" mb={3}>Ảnh đại diện</Text>
+                    <ImageUrlUpload
+                      currentImageUrl={uploadedImageUrl || profile?.profile_picture || ''}
+                      onImageChange={handleImageUrlChange}
+                      placeholder="Paste URL ảnh từ internet (imgur, drive, etc)..."
+                    />
+                  </Box>
+
+                  {/* Personal Information */}
+                  <Box p={4} bg={cardBg} borderRadius="md" borderWidth="1px" borderColor={borderColor}>
+                    <Text fontWeight="bold" mb={3}>Thông tin cá nhân</Text>
+
+                    <FormControl mb={3} isInvalid={validationErrors.full_name}>
+                      <FormLabel>Họ và tên *</FormLabel>
+                      <Input
+                        name="full_name"
+                        value={profileFormData.full_name}
+                        onChange={handleProfileChange}
+                        placeholder="Nhập họ và tên đầy đủ..."
+                      />
+                      {validationErrors.full_name && (
+                        <Text color="red.500" fontSize="sm" mt={1}>
+                          {validationErrors.full_name}
+                        </Text>
+                      )}
+                    </FormControl>
+
+                    <FormControl mb={3} isInvalid={validationErrors.birth_date}>
+                      <FormLabel>
+                        Ngày sinh
+                        {calculateAge() && (
+                          <Badge ml={2} colorScheme="blue" fontSize="xs">
+                            {calculateAge()} tuổi
+                          </Badge>
+                        )}
+                      </FormLabel>
+                      <Input
+                        name="birth_date"
+                        type="date"
+                        value={profileFormData.birth_date}
+                        onChange={handleProfileChange}
+                      />
+                      {validationErrors.birth_date && (
+                        <Text color="red.500" fontSize="sm" mt={1}>
+                          {validationErrors.birth_date}
+                        </Text>
+                      )}
+                    </FormControl>
+
+                    <FormControl mb={3} isInvalid={validationErrors.address}>
+                      <FormLabel>Địa chỉ</FormLabel>
+                      <Input
+                        name="address"
+                        value={profileFormData.address}
+                        onChange={handleProfileChange}
+                        placeholder="Nhập địa chỉ..."
+                      />
+                      {validationErrors.address && (
+                        <Text color="red.500" fontSize="sm" mt={1}>
+                          {validationErrors.address}
+                        </Text>
+                      )}
+                    </FormControl>
+
+                    <FormControl mb={4} isInvalid={validationErrors.bio}>
+                      <FormLabel>
+                        Giới thiệu bản thân
+                        <Text as="span" fontSize="xs" color="gray.500" ml={2}>
+                          ({profileFormData.bio.length}/500)
+                        </Text>
+                      </FormLabel>
+                      <Textarea
+                        name="bio"
+                        value={profileFormData.bio}
+                        onChange={handleProfileChange}
+                        placeholder="Giới thiệu ngắn về bản thân..."
+                        rows={3}
+                        resize="vertical"
+                      />
+                      {validationErrors.bio && (
+                        <Text color="red.500" fontSize="sm" mt={1}>
+                          {validationErrors.bio}
+                        </Text>
+                      )}
+                    </FormControl>
+
+                    <HStack justify="flex-end">
+                      <Button
+                        colorScheme="blue"
+                        onClick={handleProfileSubmit}
+                        isLoading={profileLoading}
+                      >
+                        {hasProfile() ? 'Cập nhật thông tin' : 'Tạo thông tin cá nhân'}
+                      </Button>
+                    </HStack>
+                  </Box>
+
+                  {/* Profile Summary (if exists) */}
+                  {hasProfile() && profile && (
+                    <Box p={4} bg={cardBg} borderRadius="md" borderWidth="1px" borderColor={borderColor}>
+                      <Text fontWeight="bold" mb={3}>Tóm tắt hồ sơ</Text>
+                      <Flex align="center" mb={3}>
+                        <Avatar
+                          size="md"
+                          name={profile.full_name}
+                          src={profile.profile_picture}
+                          mr={3}
+                        />
+                        <VStack align="start" spacing={0}>
+                          <Text fontWeight="medium">{profile.full_name}</Text>
+                          {calculateAge() && (
+                            <Text fontSize="sm" color={bioColor}>
+                              {calculateAge()} tuổi
+                            </Text>
+                          )}
+                        </VStack>
+                      </Flex>
+                      {profile.bio && (
+                        <Text fontSize="md" color={bioColor}>
+                          {profile.bio}
+                        </Text>
+                      )}
+                    </Box>
+                  )}
+                </VStack>
+              </TabPanel>
+            </TabPanels>
+          </Tabs>
         </ModalBody>
 
         <ModalFooter>
-          <Button variant="ghost" mr={3} onClick={onClose}>
-            Hủy
-          </Button>
-          <Button colorScheme="blue" onClick={handleSubmit}>
-            Lưu thay đổi
+          <Button variant="ghost" onClick={onClose}>
+            Đóng
           </Button>
         </ModalFooter>
       </ModalContent>

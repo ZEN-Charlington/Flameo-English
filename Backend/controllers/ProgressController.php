@@ -707,6 +707,141 @@ class ProgressController {
             ];
         }
     }
+    public function getMemorizedVocabulary($user_id) {
+        try {
+            $query = "
+                SELECT v.*, p.is_memorized, p.review_count, p.last_review_date
+                FROM Vocabulary v
+                JOIN Progress p ON v.vocab_id = p.vocab_id
+                WHERE p.user_id = :user_id AND p.is_memorized = 1
+                ORDER BY p.last_review_date DESC
+            ";
+            
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
+            $stmt->execute();
+            $vocabularies = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            if ($vocabularies && count($vocabularies) > 0) {
+                return [
+                    'status' => 200,
+                    'data' => $vocabularies,
+                    'message' => 'Đã tải ' . count($vocabularies) . ' từ đã thuộc'
+                ];
+            } else {
+                return [
+                    'status' => 200,
+                    'data' => [],
+                    'message' => 'Bạn chưa có từ nào đã thuộc trong sổ tay'
+                ];
+            }
+        } catch (Exception $e) {
+            return [
+                'status' => 500,
+                'message' => 'Lỗi khi lấy từ vựng đã thuộc: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    // Lấy từ vựng chưa thuộc trong sổ tay
+    public function getNotMemorizedVocabulary($user_id) {
+        try {
+            $query = "
+                SELECT v.*, p.is_memorized, p.review_count, p.last_review_date
+                FROM Vocabulary v
+                JOIN Progress p ON v.vocab_id = p.vocab_id
+                WHERE p.user_id = :user_id AND p.is_memorized = 0
+                ORDER BY p.last_review_date DESC
+            ";
+            
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
+            $stmt->execute();
+            $vocabularies = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            if ($vocabularies && count($vocabularies) > 0) {
+                return [
+                    'status' => 200,
+                    'data' => $vocabularies,
+                    'message' => 'Đã tải ' . count($vocabularies) . ' từ chưa thuộc'
+                ];
+            } else {
+                return [
+                    'status' => 200,
+                    'data' => [],
+                    'message' => 'Bạn chưa có từ nào chưa thuộc trong sổ tay'
+                ];
+            }
+        } catch (Exception $e) {
+            return [
+                'status' => 500,
+                'message' => 'Lỗi khi lấy từ vựng chưa thuộc: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    // Lấy tất cả từ vựng trong sổ tay (đã học)
+    public function getAllNotebookVocabulary($user_id) {
+        try {
+            $query = "
+                SELECT v.*, p.is_memorized, p.review_count, p.last_review_date
+                FROM Vocabulary v
+                JOIN Progress p ON v.vocab_id = p.vocab_id
+                WHERE p.user_id = :user_id
+                ORDER BY p.is_memorized DESC, p.last_review_date DESC
+            ";
+            
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
+            $stmt->execute();
+            $vocabularies = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            if ($vocabularies && count($vocabularies) > 0) {
+                // Phân loại từ
+                $memorized = array_filter($vocabularies, function($vocab) {
+                    return $vocab['is_memorized'] == 1;
+                });
+                $notMemorized = array_filter($vocabularies, function($vocab) {
+                    return $vocab['is_memorized'] == 0;
+                });
+                
+                return [
+                    'status' => 200,
+                    'data' => [
+                        'all' => $vocabularies,
+                        'memorized' => array_values($memorized),
+                        'not_memorized' => array_values($notMemorized),
+                        'stats' => [
+                            'total' => count($vocabularies),
+                            'memorized_count' => count($memorized),
+                            'not_memorized_count' => count($notMemorized)
+                        ]
+                    ],
+                    'message' => 'Đã tải sổ tay từ vựng'
+                ];
+            } else {
+                return [
+                    'status' => 200,
+                    'data' => [
+                        'all' => [],
+                        'memorized' => [],
+                        'not_memorized' => [],
+                        'stats' => [
+                            'total' => 0,
+                            'memorized_count' => 0,
+                            'not_memorized_count' => 0
+                        ]
+                    ],
+                    'message' => 'Sổ tay từ vựng của bạn đang trống'
+                ];
+            }
+        } catch (Exception $e) {
+            return [
+                'status' => 500,
+                'message' => 'Lỗi khi lấy sổ tay từ vựng: ' . $e->getMessage()
+            ];
+        }
+    }
 
     // Lấy thống kê số từ học theo ngày
     public function getLearningStats($user_id) {

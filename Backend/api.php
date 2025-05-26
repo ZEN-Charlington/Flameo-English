@@ -38,6 +38,8 @@ require_once 'controllers/LessonController.php';
 require_once 'controllers/TopicController.php';
 require_once 'controllers/ProgressController.php';
 require_once 'controllers/PasswordResetController.php';
+require_once 'controllers/StudentProfileController.php';
+
 
 // Khởi tạo các controllers
 $authController = new AuthController($db);
@@ -48,6 +50,7 @@ $lessonController = new LessonController($db);
 $topicController = new TopicController($db);
 $progressController = new ProgressController($db);
 $passwordResetController = new PasswordResetController($db);
+$studentProfileController = new StudentProfileController($db);
 
 // Lấy request method và endpoint
 $request_method = $_SERVER["REQUEST_METHOD"];
@@ -90,7 +93,7 @@ switch ($request_method) {
 // Xử lý GET requests
 function handleGetRequests() {
     global $authMiddleware, $userController, $vocabController, 
-           $lessonController, $topicController, $progressController, 
+           $lessonController, $topicController, $progressController, $studentProfileController,
            $endpoint, $id, $url_parts;
     switch ($endpoint) {
         case 'user-info':
@@ -303,7 +306,6 @@ function handleGetRequests() {
                 ]);
             }
             break;
-        // Thêm vào phần handleGetRequests() trong api.php
         case 'notebook-vocabulary':
             $userData = $authMiddleware->isAuthenticated();
             if ($userData) {
@@ -352,7 +354,53 @@ function handleGetRequests() {
                 ]);
             }
             break;
-            
+        case 'notebook-memorized':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($progressController->getMemorizedVocabulary($userData['user_id']));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+
+        case 'notebook-not-memorized':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($progressController->getNotMemorizedVocabulary($userData['user_id']));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+
+        case 'notebook-all':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($progressController->getAllNotebookVocabulary($userData['user_id']));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+        case 'student-profile':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($studentProfileController->getProfile($userData['user_id']));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+
         default:
             echo json_encode(["status" => 404, "message" => "Endpoint không hợp lệ"]);
             break;
@@ -362,7 +410,7 @@ function handleGetRequests() {
 // Xử lý POST requests
 function handlePostRequests() {
     global $authController, $authMiddleware, $userController, 
-           $progressController, $passwordResetController, $endpoint, $data;
+           $progressController, $passwordResetController, $studentProfileController, $endpoint, $data;
     
     switch ($endpoint) {
         case 'login':
@@ -489,7 +537,29 @@ function handlePostRequests() {
                 ]);
             }
             break;
-            
+
+        case 'verify-otp':
+            if (isset($data['otp'])) {
+                echo json_encode($passwordResetController->verifyOTP($data));
+            } else {
+                echo json_encode([
+                    "status" => 400, 
+                    "message" => "Thiếu mã OTP"
+                ]);
+            }
+            break;
+
+        case 'reset-password':
+            if (isset($data['otp']) && isset($data['new_password'])) {
+                echo json_encode($passwordResetController->resetPassword($data));
+            } else {
+                echo json_encode([
+                    "status" => 400, 
+                    "message" => "Thiếu OTP hoặc mật khẩu mới"
+                ]);
+            }
+            break;
+
         case 'forgot-password':
             if (isset($data['email'])) {
                 echo json_encode($passwordResetController->forgotPassword($data));
@@ -500,28 +570,7 @@ function handlePostRequests() {
                 ]);
             }
             break;
-            
-        case 'verify-token':
-            if (isset($data['token'])) {
-                echo json_encode($passwordResetController->verifyToken($data['token']));
-            } else {
-                echo json_encode([
-                    "status" => 400, 
-                    "message" => "Thiếu token"
-                ]);
-            }
-            break;
-            
-        case 'reset-password':
-            if (isset($data['token']) && isset($data['password'])) {
-                echo json_encode($passwordResetController->resetPassword($data));
-            } else {
-                echo json_encode([
-                    "status" => 400, 
-                    "message" => "Thiếu token hoặc mật khẩu mới"
-                ]);
-            }
-            break;
+
 
         case 'reset-progress':
             $userData = $authMiddleware->isAuthenticated();
@@ -536,7 +585,6 @@ function handlePostRequests() {
             break;
             
         case 'create-progress-tables':
-            // Chỉ admin mới có quyền tạo bảng
             $userData = $authMiddleware->isAdmin();
             if ($userData) {
                 echo json_encode($progressController->createTablesIfNotExist());
@@ -547,7 +595,17 @@ function handlePostRequests() {
                 ]);
             }
             break;
-            
+        case 'student-profile':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($studentProfileController->createOrUpdateProfile($userData['user_id'], $data));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;     
         default:
             echo json_encode(["status" => 404, "message" => "Endpoint không hợp lệ"]);
             break;
@@ -556,7 +614,7 @@ function handlePostRequests() {
 
 // Xử lý PUT requests
 function handlePutRequests() {
-    global $authMiddleware, $userController, $endpoint, $id, $data;
+    global $authMiddleware, $userController, $studentProfileController, $endpoint, $id, $data;
     
     switch ($endpoint) {
         case 'user-info':
@@ -582,31 +640,52 @@ function handlePutRequests() {
                 ]);
             }
             break;
-            
+        case 'student-profile':
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($studentProfileController->createOrUpdateProfile($userData['user_id'], $data));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+
         default:
             echo json_encode(["status" => 404, "message" => "Endpoint không hợp lệ"]);
             break;
     }
 }
 
-// Xử lý DELETE requests
 function handleDeleteRequests() {
-    global $authMiddleware, $endpoint, $id;
-    
-    // Chỉ admin mới có quyền xóa
-    $userData = $authMiddleware->isAdmin();
-    
-    if (!$userData) {
-        echo json_encode([
-            "status" => 403, 
-            "message" => "Không có quyền thực hiện thao tác này"
-        ]);
-        exit();
-    }
+    global $authMiddleware, $studentProfileController, $endpoint, $id;
     
     switch ($endpoint) {
-        // Các endpoint DELETE có thể được thêm sau khi cần thiết
+        case 'student-profile':
+            // User có thể xóa profile của chính mình
+            $userData = $authMiddleware->isAuthenticated();
+            if ($userData) {
+                echo json_encode($studentProfileController->deleteProfile($userData['user_id']));
+            } else {
+                echo json_encode([
+                    "status" => 401, 
+                    "message" => ERROR_UNAUTHORIZED
+                ]);
+            }
+            break;
+            
         default:
+            // Các endpoint khác chỉ admin mới được xóa
+            $userData = $authMiddleware->isAdmin();
+            if (!$userData) {
+                echo json_encode([
+                    "status" => 403, 
+                    "message" => "Không có quyền thực hiện thao tác này"
+                ]);
+                exit();
+            }
+            
             echo json_encode(["status" => 404, "message" => "Endpoint không hợp lệ"]);
             break;
     }

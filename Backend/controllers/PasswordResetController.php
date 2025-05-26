@@ -1,140 +1,188 @@
 <?php
+// controllers/PasswordResetController.php
+
+// Include PHPMailer thủ công (thay vì autoload)
+require_once 'vendor/phpmailer/PHPMailer-6.8.1/src/Exception.php';
+require_once 'vendor/phpmailer/PHPMailer-6.8.1/src/PHPMailer.php';
+require_once 'vendor/phpmailer/PHPMailer-6.8.1/src/SMTP.php';
+require_once 'config/EmailConfig.php';
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\SMTP;
+use PHPMailer\PHPMailer\Exception;
 
 class PasswordResetController {
     private $db;
     private $user;
-    
+
     public function __construct($db) {
         $this->db = $db;
         $this->user = new User($db);
     }
-    
-    // Xử lý yêu cầu quên mật khẩu
+
     public function forgotPassword($data) {
         if(empty($data['email'])) {
             return [
                 'status' => 400,
-                'message' => 'Email không được để trống'
+                'message' => 'Email là bắt buộc'
             ];
         }
-        
-        // Tìm người dùng theo email
+
         $this->user->email = $data['email'];
         
-        if($this->user->findByEmail()) {
-            // Tạo token reset password
-            $token = $this->user->generateResetToken();
-            
-            if($token) {
-                // Gửi email reset password (giả lập)
-                $resetLink = $_SERVER['HTTP_ORIGIN'] . '/frontend/pages/reset-password.php?token=' . $token;
-                
-                // Trong môi trường thực tế, bạn sẽ gửi email thực sự, ví dụ:
-                // $this->sendResetEmail($this->user->email, $this->user->display_name, $resetLink);
-                
+        if(!$this->user->findByEmail()) {
+            return [
+                'status' => 404,
+                'message' => 'Email không tồn tại trong hệ thống'
+            ];
+        }
+
+        $otp = $this->user->generateResetOTP();
+        
+        if($otp) {
+            if($this->sendOTPEmail($data['email'], $otp)) {
                 return [
                     'status' => 200,
-                    'message' => 'Liên kết đặt lại mật khẩu đã được gửi đến email của bạn.',
-                    'dev_reset_link' => $resetLink // chỉ dùng cho môi trường phát triển
+                    'message' => 'Mã OTP đã được gửi đến email của bạn',
+                    'email' => $data['email']
+                ];
+            } else {
+                return [
+                    'status' => 500,
+                    'message' => 'Không thể gửi email. Vui lòng thử lại sau.'
                 ];
             }
         }
         
-        // Không tìm thấy email hoặc có lỗi
-        // Trả về thông báo chung để tránh rò rỉ thông tin
         return [
-            'status' => 200, // Vẫn trả về 200 để tránh tiết lộ email tồn tại hay không
-            'message' => 'Nếu email tồn tại trong hệ thống, liên kết đặt lại mật khẩu sẽ được gửi.'
+            'status' => 500,
+            'message' => 'Không thể tạo OTP'
         ];
     }
-    
-    // Xác thực token reset password
-    public function verifyToken($token) {
-        if($this->user->verifyResetToken($token)) {
+
+    public function verifyOTP($data) {
+        if(empty($data['otp'])) {
+            return [
+                'status' => 400,
+                'message' => 'Mã OTP là bắt buộc'
+            ];
+        }
+
+        if($this->user->verifyResetOTP($data['otp'])) {
             return [
                 'status' => 200,
-                'valid' => true,
-                'message' => 'Token hợp lệ',
+                'message' => 'OTP hợp lệ',
                 'email' => $this->user->email
             ];
         }
-        
+
         return [
             'status' => 400,
-            'valid' => false,
-            'message' => 'Token không hợp lệ hoặc đã hết hạn'
+            'message' => 'OTP không hợp lệ hoặc đã hết hạn'
         ];
     }
-    
-    // Đặt lại mật khẩu
+
     public function resetPassword($data) {
-        if(empty($data['token']) || empty($data['password'])) {
+        if(empty($data['otp']) || empty($data['new_password'])) {
             return [
                 'status' => 400,
-                'message' => 'Token và mật khẩu mới không được để trống'
+                'message' => 'OTP và mật khẩu mới là bắt buộc'
             ];
         }
-        
-        // Xác thực token
-        if($this->user->verifyResetToken($data['token'])) {
-            // Đặt lại mật khẩu
-            if($this->user->resetPassword($data['password'])) {
-                return [
-                    'status' => 200,
-                    'message' => 'Mật khẩu đã được đặt lại thành công. Bạn có thể đăng nhập bằng mật khẩu mới.'
-                ];
-            }
+
+        if(!$this->user->verifyResetOTP($data['otp'])) {
+            return [
+                'status' => 400,
+                'message' => 'OTP không hợp lệ hoặc đã hết hạn'
+            ];
         }
-        
+
+        if($this->user->checkCurrentPassword($data['new_password'])) {
+            return [
+                'status' => 400,
+                'message' => 'Mật khẩu mới không được trùng với mật khẩu cũ',
+                'same_password' => true
+            ];
+        }
+
+        if($this->user->resetPasswordWithOTP($data['new_password'])) {
+            return [
+                'status' => 200,
+                'message' => 'Đặt lại mật khẩu thành công'
+            ];
+        }
+
         return [
-            'status' => 400,
-            'message' => 'Không thể đặt lại mật khẩu. Token không hợp lệ hoặc đã hết hạn.'
+            'status' => 500,
+            'message' => 'Không thể đặt lại mật khẩu'
         ];
     }
-    
-    // Gửi email đặt lại mật khẩu (môi trường thực tế)
-    private function sendResetEmail($email, $name, $resetLink) {
-        // Thiết lập tiêu đề
-        $subject = 'Đặt lại mật khẩu Flameo English';
+
+    private function sendOTPEmail($email, $otp) {
+        $mail = new PHPMailer(true);
         
-        // Nội dung email
-        $message = '
-        <html>
-        <head>
-            <title>Đặt lại mật khẩu Flameo English</title>
-        </head>
-        <body>
-            <div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif;">
-                <div style="text-align: center; margin-bottom: 20px;">
-                    <h1 style="color: #4a6fff;">FLAMEO</h1>
+        try {
+            $mail->isSMTP();
+            $mail->Host       = SMTP_HOST;
+            $mail->SMTPAuth   = true;
+            $mail->Username   = SMTP_USERNAME;
+            $mail->Password   = SMTP_PASSWORD;
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port       = SMTP_PORT;
+            $mail->CharSet    = 'UTF-8';
+            
+            $mail->setFrom(FROM_EMAIL, FROM_NAME);
+            $mail->addAddress($email);
+            
+            $mail->isHTML(true);
+            $mail->Subject = 'Mã xác thực đặt lại mật khẩu - Flameo English';
+            $mail->Body    = "
+                <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;'>
+                    <div style='text-align: center; margin-bottom: 30px;'>
+                        <h2 style='color: #4A90E2; margin: 0;'>🔥 Flameo English</h2>
+                    </div>
+                    
+                    <div style='background: #f8f9fa; padding: 30px; border-radius: 10px; border-left: 4px solid #4A90E2;'>
+                        <h3 style='color: #333; margin-top: 0;'>Đặt lại mật khẩu</h3>
+                        <p style='color: #666; font-size: 16px; line-height: 1.5;'>
+                            Bạn đã yêu cầu đặt lại mật khẩu cho tài khoản Flameo English.
+                        </p>
+                        
+                        <p style='color: #333; font-size: 16px; margin: 20px 0 10px 0;'>
+                            <strong>Mã OTP của bạn là:</strong>
+                        </p>
+                        
+                        <div style='background: white; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; color: #4A90E2; border: 3px dashed #4A90E2; margin: 20px 0; border-radius: 8px; letter-spacing: 8px;'>
+                            $otp
+                        </div>
+                        
+                        <div style='background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107; margin: 20px 0;'>
+                            <p style='color: #856404; margin: 0; font-weight: bold;'>
+                                ⚠️ Mã này sẽ hết hạn sau 15 phút
+                            </p>
+                        </div>
+                        
+                        <p style='color: #666; font-size: 14px; margin-top: 20px;'>
+                            Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.
+                        </p>
+                    </div>
+                    
+                    <div style='text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;'>
+                        <p style='color: #999; font-size: 12px; margin: 0;'>
+                            Email tự động từ Flameo English - Không reply
+                        </p>
+                    </div>
                 </div>
-                <div style="background: #f9f9f9; padding: 20px; border-radius: 5px;">
-                    <h2>Xin chào ' . htmlspecialchars($name) . ',</h2>
-                    <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu Flameo English của bạn.</p>
-                    <p>Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.</p>
-                    <p>Để đặt lại mật khẩu, vui lòng nhấn vào liên kết dưới đây:</p>
-                    <p style="text-align: center; margin: 30px 0;">
-                        <a href="' . $resetLink . '" style="display: inline-block; padding: 12px 30px; background-color: #4a6fff; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Đặt lại mật khẩu</a>
-                    </p>
-                    <p>Liên kết này sẽ hết hạn sau 1 giờ.</p>
-                    <p>Nếu không nhấn được vào nút trên, bạn có thể sao chép và dán liên kết sau vào trình duyệt:</p>
-                    <p style="word-break: break-all;">' . $resetLink . '</p>
-                    <p>Trân trọng,<br>Đội ngũ Flameo English</p>
-                </div>
-                <div style="text-align: center; margin-top: 20px; color: #777; font-size: 12px;">
-                    <p>Email này được gửi tự động, vui lòng không trả lời.</p>
-                </div>
-            </div>
-        </body>
-        </html>';
-        
-        // Headers
-        $headers = "MIME-Version: 1.0" . "\r\n";
-        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-        $headers .= "From: Flameo English <no-reply@flameo.com>" . "\r\n";
-        
-        // Gửi email
-        mail($email, $subject, $message, $headers);
+            ";
+            
+            $mail->send();
+            error_log("OTP sent successfully to $email: $otp");
+            return true;
+            
+        } catch (Exception $e) {
+            error_log("Email sending failed to $email: {$mail->ErrorInfo}");
+            return false;
+        }
     }
 }
 ?>

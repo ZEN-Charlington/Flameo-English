@@ -16,15 +16,16 @@ import {
   AlertIcon,
   Image
 } from '@chakra-ui/react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom'; // ← Thêm useNavigate
 import useAuthStore from '../store/authStore';
-import flameoLogo from '../assets/AppAvatar.png'; // Đường dẫn đến logo
+import flameoLogo from '../assets/AppAvatar.png';
 
 const ForgotPasswordPage = () => {
   const [email, setEmail] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
   
   const { forgotPassword, isLoading } = useAuthStore();
+  const navigate = useNavigate(); // ← Thêm useNavigate
   const toast = useToast();
   
   const bgGradient = useColorModeValue(
@@ -50,16 +51,20 @@ const ForgotPasswordPage = () => {
       await forgotPassword(email);
       setIsSubmitted(true);
       toast({
-        title: 'Đã gửi email khôi phục',
-        description: 'Vui lòng kiểm tra hộp thư để đặt lại mật khẩu.',
+        title: 'Đã gửi OTP',
+        description: 'Vui lòng kiểm tra email để lấy mã xác thực.',
         status: 'success',
-        duration: 5000,
+        duration: 3000,
         isClosable: true,
       });
+      
+      // ← THÊM NAVIGATION SANG TRANG OTP
+      navigate('/verify-otp', { state: { email } });
+      
     } catch (error) {
       toast({
-        title: 'Gửi email thất bại',
-        description: error.message || 'Đã xảy ra lỗi khi gửi email khôi phục.',
+        title: 'Gửi OTP thất bại',
+        description: error.message || 'Đã xảy ra lỗi khi gửi mã xác thực.',
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -67,6 +72,7 @@ const ForgotPasswordPage = () => {
     }
   };
   
+  // ... rest của component giữ nguyên
   return (
     <Box 
       minH="100vh" 

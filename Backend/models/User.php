@@ -166,6 +166,84 @@
             
             return $stmt->execute();
         }
+        public function generateResetOTP() {
+            date_default_timezone_set('Asia/Ho_Chi_Minh');
+            
+            $otp = sprintf('%06d', mt_rand(0, 999999));
+            $expiry = date('Y-m-d H:i:s', strtotime('+15 minutes'));
+            
+            $query = "UPDATE " . $this->table . " SET 
+                    reset_token = :reset_token,
+                    reset_token_expiry = :reset_token_expiry
+                    WHERE email = :email";
+            
+            $stmt = $this->conn->prepare($query);
+            
+            $stmt->bindParam(':reset_token', $otp);
+            $stmt->bindParam(':reset_token_expiry', $expiry);
+            $stmt->bindParam(':email', $this->email);
+            
+            if($stmt->execute()) {
+                return $otp;
+            }
+            
+            return false;
+        }
+
+        // Kiểm tra OTP có hợp lệ không
+        public function verifyResetOTP($otp) {
+            $query = "SELECT user_id, email FROM " . $this->table . " 
+                    WHERE reset_token = :reset_token
+                    AND reset_token_expiry > NOW()";
+            
+            $stmt = $this->conn->prepare($query);
+            $stmt->bindParam(':reset_token', $otp);
+            $stmt->execute();
+            
+            if($stmt->rowCount() > 0) {
+                $row = $stmt->fetch(PDO::FETCH_ASSOC);
+                $this->user_id = $row['user_id'];
+                $this->email = $row['email'];
+                return true;
+            }
+            
+            return false;
+        }
+
+        // Kiểm tra mật khẩu mới có trùng mật khẩu cũ không
+        public function checkCurrentPassword($password) {
+            $query = "SELECT password FROM " . $this->table . " WHERE user_id = :user_id";
+            $stmt = $this->conn->prepare($query);
+            $stmt->bindParam(':user_id', $this->user_id);
+            $stmt->execute();
+            
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if($row && password_verify($password, $row['password'])) {
+                return true;
+            }
+            
+            return false;
+        }
+
+        // Đặt lại mật khẩu với OTP
+        public function resetPasswordWithOTP($newPassword) {
+            $query = "UPDATE " . $this->table . " SET 
+                    password = :password,
+                    reset_token = NULL,
+                    reset_token_expiry = NULL
+                    WHERE user_id = :user_id";
+            
+            $stmt = $this->conn->prepare($query);
+            
+            $hashed_password = password_hash($newPassword, PASSWORD_DEFAULT);
+            
+            $stmt->bindParam(':password', $hashed_password);
+            $stmt->bindParam(':user_id', $this->user_id);
+            
+            return $stmt->execute();
+        }
+
+
         
         // Tìm người dùng theo email
         public function findByEmail() {

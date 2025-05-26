@@ -35,8 +35,6 @@ const ReviewModal = ({
   
   // Xử lý đóng modal an toàn
   const handleClose = () => {
-    // Log để debug
-    console.log('ReviewModal - handleClose called');
     
     // Gọi callback onClose
     if (typeof onClose === 'function') {
@@ -46,7 +44,6 @@ const ReviewModal = ({
   
   // Xử lý việc hoàn thành bài tập
   const handleComplete = (vocabId, isCorrect, isLastWord) => {
-    console.log('ReviewModal - handleComplete called, isLastWord:', isLastWord);
     
     // Gọi callback để cập nhật trạng thái từ vựng
     if (typeof onCompleteExercise === 'function') {
@@ -64,7 +61,6 @@ const ReviewModal = ({
   
   // Xử lý khi người dùng đánh dấu không thuộc từ
   const handleMarkNotMemorized = (vocabId, isLastWord) => {
-    console.log('ReviewModal - handleMarkNotMemorized called, isLastWord:', isLastWord);
     
     // Gọi callback để cập nhật trạng thái từ vựng
     if (typeof onMarkNotMemorized === 'function') {

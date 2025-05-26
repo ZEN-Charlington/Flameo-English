@@ -1,4 +1,4 @@
-// src/pages/ReviewPage.jsx - Đã cập nhật với mô hình tách rời
+// src/pages/ReviewPage.jsx - Cập nhật với tính năng sổ tay
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Box,
@@ -13,11 +13,15 @@ import {
   GridItem,
   Badge,
   useDisclosure,
-  VStack
+  VStack,
+  HStack
 } from '@chakra-ui/react';
 import { Link } from 'react-router-dom';
+import { BiBook } from 'react-icons/bi'; // Icon sách cho sổ tay
+import { FiClock } from 'react-icons/fi'; // Icon đồng hồ cho từ gần đây
 import ReviewModal from '../components/ReviewModal';
 import ReviewChart from '../components/ReviewChart';
+import NotebookSelectionModal from '../components/NotebookSelectionModal';
 import useVocabularyStore from '../store/vocabularyStore';
 
 const ReviewPage = () => {
@@ -26,16 +30,20 @@ const ReviewPage = () => {
     fetchReviewVocabulary,
     markVocabularyStatus,
     hasNoWordsToReview,
-    setCurrentVocabIndex
+    setCurrentVocabIndex,
+    resetReviewMode
   } = useVocabularyStore();
   
-  const [recentWords, setRecentWords] = useState([]); // Từ vựng học 2 ngày gần đây
+  const [recentWords, setRecentWords] = useState([]);
   const [isLoadingRecent, setIsLoadingRecent] = useState(false);
-  const [chartKey, setChartKey] = useState(Date.now()); // Key để refresh chart
-  const [isExerciseInProgress, setIsExerciseInProgress] = useState(false); // Theo dõi trạng thái đang làm bài
+  const [chartKey, setChartKey] = useState(Date.now());
+  const [isExerciseInProgress, setIsExerciseInProgress] = useState(false);
   
-  // Sử dụng useDisclosure của Chakra UI để quản lý trạng thái modal
-  const { isOpen, onOpen, onClose: closeModal } = useDisclosure();
+  // Modal cho review exercise
+  const { isOpen: isReviewOpen, onOpen: onReviewOpen, onClose: closeReviewModal } = useDisclosure();
+  
+  // Modal cho chọn loại ôn tập sổ tay
+  const { isOpen: isNotebookOpen, onOpen: onNotebookOpen, onClose: closeNotebookModal } = useDisclosure();
   
   const toast = useToast();
   const bgGradient = useColorModeValue(
@@ -45,24 +53,20 @@ const ReviewPage = () => {
   const cardBg = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   
-  // Tách hàm fetchRecentVocabulary ra thành callback riêng để có thể gọi lại
+  // Tách hàm fetchRecentVocabulary ra thành callback riêng
   const fetchRecentVocabulary = useCallback(async () => {
     try {
       setIsLoadingRecent(true);
       
-      // Sử dụng phương thức từ vocabularyStore
       const recentData = await useVocabularyStore.getState().fetchRecentVocabulary();
-      console.log("Dữ liệu từ vựng gần đây:", recentData); // Debug
       
       if (recentData && recentData.length > 0) {
         setRecentWords(recentData);
       } else {
-        // Nếu không có dữ liệu, gán mảng rỗng
         setRecentWords([]);
       }
     } catch (error) {
       console.error('Error fetching recent vocabulary:', error);
-      // Nếu có lỗi, gán mảng rỗng
       setRecentWords([]);
       
       toast({
@@ -78,27 +82,25 @@ const ReviewPage = () => {
   }, [toast]);
   
   useEffect(() => {
+    // Reset review mode khi vào trang
+    resetReviewMode();
+    
     // Lấy danh sách từ vựng cần ôn tập
     fetchReviewVocabulary();
     
     // Lấy danh sách từ vựng học trong 2 ngày gần đây
     fetchRecentVocabulary();
-  }, [fetchReviewVocabulary, fetchRecentVocabulary]);
+  }, [fetchReviewVocabulary, fetchRecentVocabulary, resetReviewMode]);
 
   // Xử lý đánh dấu từ vựng chưa thuộc
   const handleMarkNotMemorized = async (vocabId) => {
     try {
-      // Log để debug
-      console.log('ReviewPage - handleMarkNotMemorized called for vocab ID:', vocabId);
       
-      // Cập nhật trạng thái từ vựng là chưa thuộc
       await markVocabularyStatus(vocabId, false);
       
-      // Force refresh biểu đồ
       setTimeout(() => {
         setChartKey(Date.now());
         
-        // Thử refresh chart bằng cách gọi hàm refreshData nếu có
         if (document.querySelector('.recharts-responsive-container')) {
           const chartElement = document.querySelector('.recharts-responsive-container');
           if (chartElement && chartElement.parentNode && typeof chartElement.parentNode.refreshData === 'function') {
@@ -122,20 +124,15 @@ const ReviewPage = () => {
   // Xử lý hoàn thành bài tập
   const handleExerciseComplete = async (vocabId, isCorrect) => {
     try {
-      // Log để debug
-      console.log('ReviewPage - handleExerciseComplete called for vocab ID:', vocabId, 'isCorrect:', isCorrect);
       
-      // Đánh dấu từ vựng là đã thuộc nếu trả lời đúng, chưa thuộc nếu trả lời sai
       await markVocabularyStatus(vocabId, isCorrect);
       
-      // Cập nhật lại danh sách từ vựng gần đây để hiển thị đúng số lượng
+      // Cập nhật lại danh sách từ vựng gần đây
       await fetchRecentVocabulary();
       
-      // Force refresh biểu đồ
       setTimeout(() => {
         setChartKey(Date.now());
         
-        // Thử refresh chart bằng cách gọi hàm refreshData nếu có
         if (document.querySelector('.recharts-responsive-container')) {
           const chartElement = document.querySelector('.recharts-responsive-container');
           if (chartElement && chartElement.parentNode && typeof chartElement.parentNode.refreshData === 'function') {
@@ -155,9 +152,7 @@ const ReviewPage = () => {
     }
   };
   
-  // Xử lý bắt đầu ôn tập từ học gần đây
   const handleReviewRecentWords = () => {
-    // Lọc ra các từ cần ôn tập (review_count < 2)
     const wordsToReview = recentWords.filter(word => word.review_count < 2);
     
     if (wordsToReview.length === 0) {
@@ -171,14 +166,11 @@ const ReviewPage = () => {
       return;
     }
     
-    // Debug log
-    console.log("Bắt đầu ôn tập với dữ liệu:", wordsToReview);
-    
-    // Cập nhật danh sách từ vựng cần ôn tập với từ học gần đây
     useVocabularyStore.setState({
       reviewVocabulary: wordsToReview,
       currentVocabIndex: 0,
-      hasNoWordsToReview: false
+      hasNoWordsToReview: false,
+      reviewMode: 'recent'
     });
     
     toast({
@@ -189,39 +181,39 @@ const ReviewPage = () => {
       isClosable: true,
     });
     
-    // Đánh dấu bắt đầu bài tập
     setIsExerciseInProgress(true);
-    
-    // Mở modal
-    onOpen();
+    onReviewOpen();
   };
   
-  // Xử lý đóng modal
-  const handleCloseModal = () => {
-    // Log để debug
-    console.log('ReviewPage - handleCloseModal called');
+  // Xử lý mở modal chọn loại ôn tập sổ tay
+  const handleNotebookReview = () => {
+    onNotebookOpen();
+  };
+  
+  const handleStartNotebookReview = () => {
+    setIsExerciseInProgress(true);
+    onReviewOpen();
+  };
+  
+  // Xử lý đóng review modal
+  const handleCloseReviewModal = () => {
     
-    // Chỉ cập nhật trạng thái nếu đã bắt đầu làm bài
     if (isExerciseInProgress) {
-      closeModal();
+      closeReviewModal();
       
       // Cập nhật lại danh sách từ vựng
       fetchReviewVocabulary();
-      
-      // Cập nhật lại danh sách từ vựng gần đây
       fetchRecentVocabulary();
       
       // Force refresh biểu đồ
       setChartKey(Date.now());
       
-      // Reset trạng thái làm bài
+      // Reset trạng thái
       setIsExerciseInProgress(false);
-      
-      // Reset index về 0
       setCurrentVocabIndex(0);
+      resetReviewMode();
     } else {
-      // Nếu chưa bắt đầu làm bài, chỉ đóng modal
-      closeModal();
+      closeReviewModal();
     }
   };
   
@@ -244,11 +236,10 @@ const ReviewPage = () => {
             Ôn tập từ vựng
           </Heading>
           
-          {/* Chỉ hiển thị thống kê khi có từ vựng gần đây */}
           {hasRecentWords ? (
             <Grid templateColumns={{ base: "1fr", md: "2fr 1fr" }} gap={6} w="100%">
               <GridItem>
-                <ReviewChart key={chartKey} /> {/* Thêm key để force re-render */}
+                <ReviewChart key={chartKey} />
               </GridItem>
               
               <GridItem>
@@ -259,7 +250,7 @@ const ReviewPage = () => {
                   borderWidth="1px"
                   borderColor={borderColor}
                   boxShadow="md"
-                  height="100%"
+                  height="100%" 
                   display="flex"
                   flexDirection="column"
                   justifyContent="space-between"
@@ -277,38 +268,72 @@ const ReviewPage = () => {
                     </Badge></Text>
                   </VStack>
                   
-                  <Button 
-                    colorScheme="blue" 
-                    mt={4} 
-                    w="100%"
-                    onClick={handleReviewRecentWords}
-                    isLoading={isLoadingRecent}
-                    isDisabled={recentWords.filter(word => word.review_count < 2).length === 0}
-                  >
-                    Ôn tập từ gần đây
-                  </Button>
+                  <VStack spacing={2} mt={4}>
+                    {/* Nút ôn tập từ gần đây - đặt lên trên */}
+                    <Button 
+                      leftIcon={<FiClock />}
+                      colorScheme="blue" 
+                      size="md"
+                      w="100%"
+                      onClick={handleReviewRecentWords}
+                      isLoading={isLoadingRecent}
+                      isDisabled={recentWords.filter(word => word.review_count < 2).length === 0}
+                    >
+                      Ôn tập từ gần đây
+                    </Button>
+                    
+                    {/* Nút ôn tập sổ tay - đặt xuống dưới */}
+                    <Button
+                      leftIcon={<BiBook />}
+                      colorScheme="blue"
+                      size="md"
+                      w="100%"
+                      onClick={handleNotebookReview}
+                    >
+                      Ôn tập từ trong sổ tay
+                    </Button>
+                  </VStack>
                 </Box>
               </GridItem>
             </Grid>
           ) : (
-            <Flex direction="column" align="center" justify="center" minH="40vh">
-              <Heading size="lg" mb={4} textAlign="center">
-                Bạn chưa có từ nào cần ôn tập
-              </Heading>
-              <Text mb={6} color="gray.500" textAlign="center">
-                Hãy bắt đầu học từ mới hoặc sử dụng ôn tập từ gần đây để luyện tập nhé!
-              </Text>
-              <Button as={Link} to="/learn" colorScheme="blue" size="lg">
-                Học từ mới
+            <VStack spacing={6}>
+              {/* Nút ôn tập sổ tay khi không có từ gần đây */}
+              <Button
+                leftIcon={<BiBook />}
+                colorScheme="blue"
+                size="lg"
+                onClick={handleNotebookReview}
+              >
+                Ôn tập từ trong sổ tay
               </Button>
-            </Flex>
+              
+              <Flex direction="column" align="center" justify="center" minH="40vh">
+                <Heading size="lg" mb={4} textAlign="center">
+                  Bạn chưa có từ nào cần ôn tập
+                </Heading>
+                <Text mb={6} color="gray.500" textAlign="center">
+                  Hãy bắt đầu học từ mới hoặc sử dụng ôn tập từ gần đây để luyện tập nhé!
+                </Text>
+                <Button as={Link} to="/learn" colorScheme="blue" size="lg">
+                  Học từ mới
+                </Button>
+              </Flex>
+            </VStack>
           )}
         </VStack>
         
-        {/* Sử dụng component ReviewModal */}
+        {/* Modal chọn loại ôn tập sổ tay */}
+        <NotebookSelectionModal 
+          isOpen={isNotebookOpen}
+          onClose={closeNotebookModal}
+          onStartReview={handleStartNotebookReview}
+        />
+        
+        {/* Modal ôn tập */}
         <ReviewModal 
-          isOpen={isOpen} 
-          onClose={handleCloseModal}
+          isOpen={isReviewOpen} 
+          onClose={handleCloseReviewModal}
           onCompleteExercise={handleExerciseComplete}
           onMarkNotMemorized={handleMarkNotMemorized}
         />

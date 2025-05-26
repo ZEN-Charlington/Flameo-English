@@ -53,7 +53,6 @@ class AuthController {
         ];
     }
 
-    // Đăng nhập
     public function login($data) {
         if(empty($data['email']) || empty($data['password'])) {
             return [
@@ -65,32 +64,39 @@ class AuthController {
         // Thiết lập email
         $this->user->email = $data['email'];
         
-        // Kiểm tra đăng nhập
+        // Kiểm tra email có tồn tại không
         $result = $this->user->login();
         $user = $result->fetch(PDO::FETCH_ASSOC);
 
-        error_log(print_r($user, true));  // Ghi thông tin ra log
-        
-        if($user && password_verify($data['password'], $user['password'])) {
-            // Tạo token JWT
-            $token = $this->generateJwt($user);
-            
+        // Kiểm tra email không tồn tại
+        if(!$user) {
             return [
-                'status' => 200,
-                'message' => 'Đăng nhập thành công',
-                'token' => $token,
-                'user' => [
-                    'user_id' => $user['user_id'],
-                    'email' => $user['email'],
-                    'display_name' => $user['display_name'],
-                    'role' => $user['role']
-                ]
+                'status' => 404,
+                'message' => 'Email không tồn tại trong hệ thống'
             ];
         }
         
+        // Kiểm tra password
+        if(!password_verify($data['password'], $user['password'])) {
+            return [
+                'status' => 401,
+                'message' => 'Mật khẩu không chính xác'
+            ];
+        }
+        
+        // Đăng nhập thành công
+        $token = $this->generateJwt($user);
+        
         return [
-            'status' => 401,
-            'message' => ERROR_LOGIN_FAILED
+            'status' => 200,
+            'message' => 'Đăng nhập thành công',
+            'token' => $token,
+            'user' => [
+                'user_id' => $user['user_id'],
+                'email' => $user['email'],
+                'display_name' => $user['display_name'],
+                'role' => $user['role']
+            ]
         ];
     }
 

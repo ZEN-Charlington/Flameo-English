@@ -1,4 +1,4 @@
-// src/pages/ProgressPage.jsx (Đã cập nhật)
+// src/pages/ProgressPage.jsx (Fixed hooks order)
 import React, { useEffect, useState } from 'react';
 import {
   Box,
@@ -76,6 +76,9 @@ const ProgressChart = ({ title, value, max, color, icon }) => {
 };
 
 const ProgressPage = () => {
+  // ===== ALL HOOKS FIRST - KHÔNG ĐƯỢC THAY ĐỔI THỨ TỰ =====
+  
+  // Store hooks
   const { 
     overallProgress,
     topicProgress,
@@ -93,9 +96,11 @@ const ProgressPage = () => {
     error: vocabStatsError
   } = useVocabularyStore();
   
+  // State hooks
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   
+  // Color mode hooks - PHẢI Ở ĐẦU, KHÔNG ĐƯỢC ĐIỀU KIỆN
   const cardBg = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   const bgGradient = useColorModeValue(
@@ -104,7 +109,9 @@ const ProgressPage = () => {
   );
   const completedLessonBg = useColorModeValue('gray.50', 'gray.700');
   const completedLessonText = useColorModeValue('gray.500', 'gray.300');
+  const grayText = useColorModeValue('gray.500', 'gray.400');
   
+  // Effect hooks
   useEffect(() => {
     // Tải song song dữ liệu tiến độ và thống kê từ vựng theo loại
     const loadData = async () => {
@@ -128,6 +135,8 @@ const ProgressPage = () => {
     loadData();
   }, [fetchAllProgress, fetchVocabularyStatsByType]);
   
+  // ===== COMPUTED VALUES & FUNCTIONS =====
+  
   // Tạo dữ liệu thống kê theo ngày từ vocabProgress
   const createDailyStats = () => {
     if (!vocabProgress || vocabProgress.length === 0) {
@@ -139,7 +148,11 @@ const ProgressPage = () => {
     
     vocabProgress.forEach(progress => {
       if (progress.last_review_date) {
-        const date = new Date(progress.last_review_date).toLocaleDateString();
+        const date = new Date(progress.last_review_date).toLocaleDateString('vi-VN', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
         if (!dailyMap[date]) {
           dailyMap[date] = 0;
         }
@@ -154,7 +167,7 @@ const ProgressPage = () => {
     }));
     
     // Sắp xếp theo ngày (mới nhất trước)
-    result.sort((a, b) => new Date(b.date) - new Date(a.date));
+    result.sort((a, b) => new Date(b.date.split('/').reverse().join('/')) - new Date(a.date.split('/').reverse().join('/')));
     
     // Chỉ lấy 7 ngày gần nhất
     return result.slice(0, 7);
@@ -163,6 +176,8 @@ const ProgressPage = () => {
   const dailyStats = createDailyStats();
   const maxDailyWords = dailyStats.length > 0 ? 
     Math.max(...dailyStats.map(day => day.count)) : 10;
+  
+  // ===== RENDER =====
   
   return (
     <Box
@@ -297,7 +312,7 @@ const ProgressPage = () => {
                       </CardBody>
                     </Card>
                     
-                    {/* Bài học đã hoàn thành gần đây - Đã cập nhật màu nền theo theme */}
+                    {/* Bài học đã hoàn thành gần đây */}
                     <Card bg={cardBg} boxShadow="md">
                       <CardHeader pb={0}>
                         <Heading size="md">Bài học đã hoàn thành gần đây</Heading>
@@ -306,17 +321,21 @@ const ProgressPage = () => {
                         <VStack spacing={2} align="stretch">
                           {completedLessons && completedLessons.length > 0 ? (
                             completedLessons.slice(0, 5).map(lesson => (
-                              <Box key={lesson.lesson_id} p={2} borderRadius="md" bg={completedLessonBg} _dark={{ bg: 'gray.700' }}>
+                              <Box key={lesson.lesson_id} p={2} borderRadius="md" bg={completedLessonBg}>
                                 <Flex justify="space-between">
                                   <Text fontWeight="medium">{lesson.title}</Text>
                                   <Text fontSize="sm" color={completedLessonText}>
-                                    {new Date(lesson.completion_date).toLocaleDateString()}
+                                    {new Date(lesson.completion_date).toLocaleDateString('vi-VN', {
+                                      day: '2-digit',
+                                      month: '2-digit',
+                                      year: 'numeric'
+                                    })}
                                   </Text>
                                 </Flex>
                               </Box>
                             ))
                           ) : (
-                            <Text color={completedLessonText}>
+                            <Text color={grayText}>
                               Bạn chưa hoàn thành bài học nào. Hãy bắt đầu học!
                             </Text>
                           )}
@@ -359,7 +378,7 @@ const ProgressPage = () => {
                             mb={3}
                           />
                           
-                          <HStack fontSize="sm" color={useColorModeValue('gray.500', 'gray.400')} justify="space-between">
+                          <HStack fontSize="sm" color={grayText} justify="space-between">
                             <Text>{topic.completed_lessons} / {topic.total_lessons} bài học</Text>
                             <Divider orientation="vertical" h="20px" />
                             <Text>{topic.vocabulary_count || 0} từ vựng</Text>
@@ -376,13 +395,13 @@ const ProgressPage = () => {
                         boxShadow="md"
                         textAlign="center"
                       >
-                        <Text color={useColorModeValue('gray.500', 'gray.400')}>Chưa có dữ liệu tiến độ cho chủ đề nào.</Text>
+                        <Text color={grayText}>Chưa có dữ liệu tiến độ cho chủ đề nào.</Text>
                       </Box>
                     )}
                   </VStack>
                 </TabPanel>
                 
-                {/* Tab Thống kê - Đã xóa phần "Tóm tắt tiến độ" */}
+                {/* Tab Thống kê */}
                 <TabPanel>
                   <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
                     <Box
@@ -411,7 +430,7 @@ const ProgressPage = () => {
                             </Box>
                           ))
                         ) : (
-                          <Text color={useColorModeValue('gray.500', 'gray.400')}>Chưa có dữ liệu học tập theo ngày.</Text>
+                          <Text color={grayText}>Chưa có dữ liệu học tập theo ngày.</Text>
                         )}
                       </VStack>
                     </Box>
@@ -444,7 +463,7 @@ const ProgressPage = () => {
                             </Box>
                           ))
                         ) : (
-                          <Text color={useColorModeValue('gray.500', 'gray.400')}>Chưa có dữ liệu từ vựng theo loại.</Text>
+                          <Text color={grayText}>Chưa có dữ liệu từ vựng theo loại.</Text>
                         )}
                       </VStack>
                     </Box>

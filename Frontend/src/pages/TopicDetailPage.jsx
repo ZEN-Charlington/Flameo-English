@@ -106,7 +106,6 @@ const TopicDetailPage = () => {
     if (needsRefresh && topicId) {
       const refreshData = async () => {
         try {
-          console.log('Refreshing topic data...');
           // Tải lại dữ liệu bài học và tiến độ
           await fetchLessonsByTopic(topicId);
           await fetchCompletedLessons();

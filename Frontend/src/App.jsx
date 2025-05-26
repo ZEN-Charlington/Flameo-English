@@ -14,6 +14,7 @@ import TopicDetailPage from './pages/TopicDetailPage';
 import LessonPage from './pages/LessonPage';
 import NotebookPage from './pages/NotebookPage';
 import ProgressPage from './pages/ProgressPage';
+import OTPVerificationPage from  './pages/OTPVerificationPage';
 
 // Import Layout
 import Layout from './components/Layout';
@@ -56,6 +57,7 @@ const App = () => {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+      <Route path="/verify-otp" element={<OTPVerificationPage />} />
       
       {/* Protected Routes */}
       <Route path="/" element={<Layout />}>
