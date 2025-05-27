@@ -1,3 +1,4 @@
+// src/components/Navbar.jsx
 import React from 'react';
 import {
   Box,
@@ -25,6 +26,7 @@ import { IoMoon } from "react-icons/io5";
 import { LuSun } from "react-icons/lu";
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import UserSettingsModal from './UserSettingsModal';
+import AudioControls from './AudioControls';
 import useAuthStore from '../store/authStore';
 import flameoLogo from '../assets/FlameoLogo.png';
 
@@ -95,8 +97,10 @@ const Navbar = () => {
             ))}
           </Flex>
 
-          {/* Dark Mode + Avatar */}
+          {/* Audio Controls + Dark Mode + Avatar */}
           <HStack spacing={2}>
+            <AudioControls />
+            
             <IconButton
               aria-label="Đổi giao diện"
               icon={colorMode === 'light' ? <IoMoon /> : <LuSun />}

@@ -1,7 +1,9 @@
+// src/App.jsx
 import React, { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import useAuthStore from './store/authStore';
 import useProgressStore from './store/progressStore';
+import { AudioProvider } from './utils/AudioProvider';
 
 // Import các trang
 import LoginPage from './pages/LoginPage';
@@ -51,52 +53,54 @@ const App = () => {
   }, [user, fetchAllProgress]);
   
   return (
-    <Routes>
-      {/* Public Routes */}
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
-      <Route path="/verify-otp" element={<OTPVerificationPage />} />
-      
-      {/* Protected Routes */}
-      <Route path="/" element={<Layout />}>
-        <Route index element={<Navigate to="/review" replace />} />
-        <Route path="review" element={
-          <ProtectedRoute>
-            <ReviewPage />
-          </ProtectedRoute>
-        } />
-        <Route path="learn" element={
-          <ProtectedRoute>
-            <LearnPage />
-          </ProtectedRoute>
-        } />
-        <Route path="topics/:topicId" element={
-          <ProtectedRoute>
-            <TopicDetailPage />
-          </ProtectedRoute>
-        } />
-        <Route path="lessons/:lessonId" element={
-          <ProtectedRoute>
-            <LessonPage />
-          </ProtectedRoute>
-        } />
-        <Route path="notebook" element={
-          <ProtectedRoute>
-            <NotebookPage />
-          </ProtectedRoute>
-        } />
-        <Route path="progress" element={
-          <ProtectedRoute>
-            <ProgressPage />
-          </ProtectedRoute>
-        } />
-      </Route>
-      
-      {/* Fallback */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <AudioProvider>
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+        <Route path="/verify-otp" element={<OTPVerificationPage />} />
+        
+        {/* Protected Routes */}
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Navigate to="/review" replace />} />
+          <Route path="review" element={
+            <ProtectedRoute>
+              <ReviewPage />
+            </ProtectedRoute>
+          } />
+          <Route path="learn" element={
+            <ProtectedRoute>
+              <LearnPage />
+            </ProtectedRoute>
+          } />
+          <Route path="topics/:topicId" element={
+            <ProtectedRoute>
+              <TopicDetailPage />
+            </ProtectedRoute>
+          } />
+          <Route path="lessons/:lessonId" element={
+            <ProtectedRoute>
+              <LessonPage />
+            </ProtectedRoute>
+          } />
+          <Route path="notebook" element={
+            <ProtectedRoute>
+              <NotebookPage />
+            </ProtectedRoute>
+          } />
+          <Route path="progress" element={
+            <ProtectedRoute>
+              <ProgressPage />
+            </ProtectedRoute>
+          } />
+        </Route>
+        
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AudioProvider>
   );
 };
 

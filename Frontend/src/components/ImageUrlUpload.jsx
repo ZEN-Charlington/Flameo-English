@@ -338,7 +338,7 @@ const ImageUrlUpload = ({
       
       {/* Hướng dẫn */}
       <Text fontSize="xs" color="gray.500" textAlign="center">
-        💡 Tip: Right-click vào ảnh trên mạng → "Copy image address" → paste vào đây
+        💡 Tip: Right-click vào ảnh trên mạng → "Copy image address" → paste zô đây nhe
       </Text>
     </VStack>
   );

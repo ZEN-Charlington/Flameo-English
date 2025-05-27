@@ -15,7 +15,6 @@ class StudentProfileController {
         $this->user = new User($db);
     }
 
-    // Lấy thông tin profile của user
     public function getProfile($user_id) {
         try {
             $this->studentProfile->user_id = $user_id;
@@ -49,7 +48,6 @@ class StudentProfileController {
         }
     }
 
-    // Tạo hoặc cập nhật profile
     public function createOrUpdateProfile($user_id, $data) {
         try {
             // Kiểm tra user có tồn tại không
@@ -61,8 +59,12 @@ class StudentProfileController {
                 ];
             }
 
-            // Validate dữ liệu đầu vào
-            $validation = $this->validateProfileData($data);
+            // Kiểm tra profile đã tồn tại chưa
+            $this->studentProfile->user_id = $user_id;
+            $profileExists = $this->studentProfile->getProfileByUserId();
+
+            // Validate dữ liệu với context tương ứng
+            $validation = $this->validateProfileData($data, $profileExists);
             if (!$validation['valid']) {
                 return [
                     'status' => 400,
@@ -70,10 +72,6 @@ class StudentProfileController {
                     'errors' => $validation['errors']
                 ];
             }
-
-            // Kiểm tra profile đã tồn tại chưa
-            $this->studentProfile->user_id = $user_id;
-            $profileExists = $this->studentProfile->getProfileByUserId();
 
             // Gán dữ liệu đã validate
             $this->studentProfile->user_id = $user_id;
@@ -136,25 +134,41 @@ class StudentProfileController {
         }
     }
 
-    // Validate dữ liệu profile
-    private function validateProfileData($data) {
+    // Validate dữ liệu profile với context khác nhau
+    private function validateProfileData($data, $isUpdate = false) {
         $errors = [];
         $validatedData = [];
 
-        // Validate full_name
-        if (empty($data['full_name'])) {
-            $errors['full_name'] = 'Họ và tên không được để trống';
-        } elseif (strlen($data['full_name']) < 2) {
-            $errors['full_name'] = 'Họ và tên phải có ít nhất 2 ký tự';
-        } elseif (strlen($data['full_name']) > 100) {
-            $errors['full_name'] = 'Họ và tên không được quá 100 ký tự';
-        } elseif (!preg_match('/^[a-zA-ZÀ-ỹ\s]+$/u', $data['full_name'])) {
-            $errors['full_name'] = 'Họ và tên chỉ được chứa chữ cái và khoảng trắng';
+        // Validate full_name - Logic khác nhau cho create vs update
+        if ($isUpdate) {
+            // Khi update: bắt buộc phải có full_name
+            if (empty($data['full_name'])) {
+                $errors['full_name'] = 'Khi cập nhật, họ và tên không được để trống';
+            } elseif (strlen($data['full_name']) < 2) {
+                $errors['full_name'] = 'Họ và tên phải có ít nhất 2 ký tự';
+            } elseif (strlen($data['full_name']) > 100) {
+                $errors['full_name'] = 'Họ và tên không được quá 100 ký tự';
+            } elseif (!preg_match('/^[a-zA-ZÀ-ỹ\s]+$/u', $data['full_name'])) {
+                $errors['full_name'] = 'Họ và tên chỉ được chứa chữ cái và khoảng trắng';
+            } else {
+                $validatedData['full_name'] = trim($data['full_name']);
+            }
         } else {
-            $validatedData['full_name'] = trim($data['full_name']);
+            // Khi create: cho phép null hoặc empty để tạo skeleton profile
+            if (empty($data['full_name'])) {
+                $validatedData['full_name'] = null;
+            } elseif (strlen($data['full_name']) < 2) {
+                $errors['full_name'] = 'Họ và tên phải có ít nhất 2 ký tự';
+            } elseif (strlen($data['full_name']) > 100) {
+                $errors['full_name'] = 'Họ và tên không được quá 100 ký tự';
+            } elseif (!preg_match('/^[a-zA-ZÀ-ỹ\s]+$/u', $data['full_name'])) {
+                $errors['full_name'] = 'Họ và tên chỉ được chứa chữ cái và khoảng trắng';
+            } else {
+                $validatedData['full_name'] = trim($data['full_name']);
+            }
         }
 
-        // Validate birth_date
+        // Validate birth_date (giống như cũ)
         if (!empty($data['birth_date'])) {
             $birthDate = DateTime::createFromFormat('Y-m-d', $data['birth_date']);
             if (!$birthDate) {
@@ -177,7 +191,7 @@ class StudentProfileController {
             $validatedData['birth_date'] = null;
         }
 
-        // Validate address
+        // Validate address (giống như cũ)
         if (!empty($data['address'])) {
             if (strlen($data['address']) > 255) {
                 $errors['address'] = 'Địa chỉ không được quá 255 ký tự';
@@ -188,7 +202,7 @@ class StudentProfileController {
             $validatedData['address'] = '';
         }
 
-        // Validate profile_picture URL
+        // Validate profile_picture URL (giống như cũ)
         if (!empty($data['profile_picture'])) {
             if (!$this->isValidImageUrl($data['profile_picture'])) {
                 $errors['profile_picture'] = 'URL ảnh không hợp lệ';
@@ -199,7 +213,7 @@ class StudentProfileController {
             $validatedData['profile_picture'] = '';
         }
 
-        // Validate bio
+        // Validate bio (giống như cũ)
         if (!empty($data['bio'])) {
             if (strlen($data['bio']) > 500) {
                 $errors['bio'] = 'Giới thiệu bản thân không được quá 500 ký tự';
@@ -217,24 +231,19 @@ class StudentProfileController {
         ];
     }
 
-    // Validate URL ảnh
     private function isValidImageUrl($url) {
-        // Kiểm tra URL format cơ bản
         if (!filter_var($url, FILTER_VALIDATE_URL)) {
             return false;
         }
 
-        // Kiểm tra độ dài URL
         if (strlen($url) > 1000) {
             return false;
         }
 
-        // Chỉ cho phép HTTPS để bảo mật
         if (!preg_match('/^https:\/\//', $url)) {
             return false;
         }
 
-        // Kiểm tra các domain ảnh phổ biến và an toàn
         $allowedDomains = [
             'imgur.com', 'i.imgur.com',
             'images.unsplash.com', 'unsplash.com',
@@ -262,14 +271,10 @@ class StudentProfileController {
                 break;
             }
         }
-
-        // Có thể bỏ comment dòng này để cho phép tất cả HTTPS domain
-        // return true;
         
         return $isAllowedDomain;
     }
 
-    // Xóa profile
     public function deleteProfile($user_id) {
         try {
             $this->studentProfile->user_id = $user_id;
@@ -278,24 +283,24 @@ class StudentProfileController {
                 if ($this->studentProfile->delete()) {
                     return [
                         'status' => 200,
-                        'message' => 'Xóa profile thành công'
+                        'message' => 'Xóa toàn bộ thông tin cá nhân thành công'
                     ];
                 } else {
                     return [
                         'status' => 500,
-                        'message' => 'Không thể xóa profile'
+                        'message' => 'Không thể xóa thông tin cá nhân'
                     ];
                 }
             } else {
                 return [
                     'status' => 404,
-                    'message' => 'Không tìm thấy profile'
+                    'message' => 'Không tìm thấy thông tin cá nhân để xóa'
                 ];
             }
         } catch (Exception $e) {
             return [
                 'status' => 500,
-                'message' => 'Lỗi khi xóa profile: ' . $e->getMessage()
+                'message' => 'Lỗi khi xóa thông tin cá nhân: ' . $e->getMessage()
             ];
         }
     }
