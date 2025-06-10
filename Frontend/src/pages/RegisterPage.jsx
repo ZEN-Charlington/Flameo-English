@@ -174,7 +174,7 @@ const RegisterPage = () => {
                   </FormControl>
                   
                   <FormControl isInvalid={errors.display_name}>
-                    <FormLabel>Tên hiển thị</FormLabel>
+                    <FormLabel>Tên hiển thị (nickname)</FormLabel>
                     <Input
                       type="text"
                       name="display_name"

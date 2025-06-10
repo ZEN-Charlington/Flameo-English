@@ -1,4 +1,3 @@
-// src/pages/TopicDetailPage.jsx
 import React, { useEffect, useState } from 'react';
 import {
   Box,
@@ -42,33 +41,36 @@ const TopicDetailPage = () => {
   } = useProgressStore();
   
   const [selectedTopic, setSelectedTopic] = useState(null);
+  const [needsRefresh, setNeedsRefresh] = useState(true);
   
   const bgGradient = useColorModeValue(
     'linear(to-b, blue.50, gray.50)',
     'linear(to-b, gray.900, gray.800)'
   );
-  
   const cardBg = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   const descriptionBg = useColorModeValue('blue.50', 'blue.900');
   const descriptionBorder = useColorModeValue('blue.200', 'blue.700');
   const descriptionText = useColorModeValue('blue.700', 'blue.200');
+  const grayBorderLight = useColorModeValue('gray.300', 'gray.600');
+  const grayBorderDark = useColorModeValue('gray.300', 'gray.600');
+  const greenBorder = useColorModeValue('green.300', 'green.600');
+  const grayBg = useColorModeValue('gray.200', 'gray.700');
+  const greenBg = useColorModeValue('green.400', 'green.600');
+  const blueBg = useColorModeValue('blue.400', 'blue.600');
+  const grayText = useColorModeValue('gray.600', 'gray.300');
   
-  // Lấy thông tin chủ đề và danh sách bài học khi component mount
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Nếu chưa có danh sách topics, lấy danh sách
         if (topics.length === 0) {
           await fetchAllTopics();
         }
         
-        // Lấy danh sách bài học của chủ đề
         if (topicId) {
           await fetchLessonsByTopic(topicId);
         }
         
-        // Lấy danh sách bài học đã hoàn thành
         await fetchCompletedLessons();
       } catch (error) {
         console.error('Error loading topic data:', error);
@@ -78,38 +80,17 @@ const TopicDetailPage = () => {
     loadData();
   }, [topicId, fetchLessonsByTopic, fetchAllTopics, fetchCompletedLessons, topics.length]);
   
-  // Cập nhật thông tin chủ đề khi topics hoặc topicId thay đổi
   useEffect(() => {
     const topic = topics.find(t => t.topic_id.toString() === topicId.toString());
     setSelectedTopic(topic);
   }, [topics, topicId]);
-  
-  // Xử lý điều hướng đến trang học
-  const handleStartLesson = (lesson, index) => {
-    // Kiểm tra xem bài học có bị khóa không
-    if (index > 0) {
-      const previousLesson = topicLessons[index - 1];
-      if (!isLessonCompleted(previousLesson.lesson_id)) {
-        return; // Không cho phép mở bài học bị khóa
-      }
-    }
-    
-    navigate(`/lessons/${lesson.lesson_id}`);
-  };
-  
-  // Thêm một state để theo dõi nếu dữ liệu cần được tải lại
-  const [needsRefresh, setNeedsRefresh] = useState(true);
 
-  // Thêm useEffect này vào TopicDetailPage.jsx
   useEffect(() => {
-    // Tải lại dữ liệu khi component mount hoặc khi cần refresh
     if (needsRefresh && topicId) {
       const refreshData = async () => {
         try {
-          // Tải lại dữ liệu bài học và tiến độ
           await fetchLessonsByTopic(topicId);
           await fetchCompletedLessons();
-          // Cập nhật trạng thái topic nếu cần
           if (topics.length > 0) {
             const updatedTopic = topics.find(t => t.topic_id.toString() === topicId.toString());
             setSelectedTopic(updatedTopic);
@@ -124,29 +105,34 @@ const TopicDetailPage = () => {
     }
   }, [needsRefresh, topicId, fetchLessonsByTopic, fetchCompletedLessons, topics]);
   
-  // Xử lý quay lại
   const handleBack = () => {
     navigate('/learn');
   };
   
-  // Kiểm tra xem bài học đã hoàn thành chưa
+  const handleStartLesson = (lesson, index) => {
+    if (index > 0) {
+      const previousLesson = topicLessons[index - 1];
+      if (!isLessonCompleted(previousLesson.lesson_id)) {
+        return;
+      }
+    }
+    
+    navigate(`/lessons/${lesson.lesson_id}`);
+  };
+  
   const isLessonCompleted = (lessonId) => {
     if (!completedLessons || completedLessons.length === 0) return false;
     
-    // Convert lessonId thành string để đảm bảo so sánh chính xác
     const lessonIdStr = String(lessonId);
     
     return completedLessons.some(lesson => {
-      // Kiểm tra cả string và number
       return (String(lesson.lesson_id) === lessonIdStr && lesson.is_completed === 1);
     });
   };
   
-  // Kiểm tra xem bài học có bị khóa không
   const isLessonLocked = (index) => {
-    if (index === 0) return false; // Bài đầu tiên không bị khóa
+    if (index === 0) return false;
     
-    // Kiểm tra xem bài học trước đó đã hoàn thành chưa
     const previousLesson = topicLessons[index - 1];
     return !isLessonCompleted(previousLesson.lesson_id);
   };
@@ -161,7 +147,6 @@ const TopicDetailPage = () => {
     >
       <Container maxW="container.lg">
         <VStack spacing={6} align="stretch">
-          {/* Nút quay lại và tiêu đề */}
           <Flex align="center" mb={2}>
             <IconButton
               icon={<ChevronLeftIcon boxSize={6} />}
@@ -175,7 +160,6 @@ const TopicDetailPage = () => {
             </Heading>
           </Flex>
           
-          {/* Mô tả chủ đề */}
           {selectedTopic && (
             <Box 
               p={5} 
@@ -187,7 +171,6 @@ const TopicDetailPage = () => {
             >
               <Text color={descriptionText}>{selectedTopic.description}</Text>
               
-              {/* Tiến độ chủ đề */}
               <Box mt={4}>
                 <Flex justify="space-between" mb={1}>
                   <Text fontWeight="medium">Tiến độ chủ đề</Text>
@@ -203,7 +186,6 @@ const TopicDetailPage = () => {
             </Box>
           )}
           
-          {/* Thông báo lỗi */}
           {error && (
             <Alert status="error" borderRadius="md">
               <AlertIcon />
@@ -211,7 +193,6 @@ const TopicDetailPage = () => {
             </Alert>
           )}
           
-          {/* Danh sách bài học */}
           {isLoading ? (
             <Flex justify="center" py={10}>
               <Spinner size="xl" color="blue.500" />
@@ -230,7 +211,7 @@ const TopicDetailPage = () => {
                       position="relative"
                       bg={cardBg}
                       borderWidth="1px"
-                      borderColor={locked ? useColorModeValue('gray.300', 'gray.600') : completed ? useColorModeValue('green.300', 'green.600') : borderColor}
+                      borderColor={locked ? grayBorderLight : completed ? greenBorder : borderColor}
                       borderRadius="lg"
                       boxShadow={locked ? 'none' : 'md'}
                       overflow="hidden"
@@ -242,9 +223,8 @@ const TopicDetailPage = () => {
                       _dark={{ bg: 'gray.800' }}
                     >
                       <Flex p={0}>
-                        {/* Phần bên trái - hình ảnh và số thứ tự */}
                         <Box 
-                          bg={locked ? useColorModeValue('gray.200', 'gray.700') : completed ? useColorModeValue('green.400', 'green.600') : useColorModeValue('blue.400', 'blue.600')} 
+                          bg={locked ? grayBg : completed ? greenBg : blueBg} 
                           p={6} 
                           w="100px" 
                           color="white"
@@ -260,7 +240,6 @@ const TopicDetailPage = () => {
                           )}
                         </Box>
                         
-                        {/* Phần bên phải - thông tin bài học */}
                         <Box p={4} flex="1">
                           <VStack align="start" spacing={2}>
                             <Flex w="100%" justify="space-between" align="center">
@@ -284,7 +263,7 @@ const TopicDetailPage = () => {
                             
                             <Divider />
                             
-                            <Flex w="100%" justify="space-between" fontSize="sm" color={useColorModeValue('gray.600', 'gray.300')}>
+                            <Flex w="100%" justify="space-between" fontSize="sm" color={grayText}>
                               <Text>{lesson.total_words || 0} từ vựng</Text>
                               {!locked && (
                                 <Flex align="center">
@@ -333,7 +312,6 @@ const TopicDetailPage = () => {
             </VStack>
           )}
           
-          {/* Nút trở về */}
           <Flex justify="center" mt={8}>
             <Button 
               leftIcon={<ChevronLeftIcon />} 

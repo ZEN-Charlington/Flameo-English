@@ -1,5 +1,5 @@
 // src/pages/LessonPage.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Box,
   Container,
@@ -28,6 +28,12 @@ const LessonPage = () => {
   const { lessonId } = useParams();
   const navigate = useNavigate();
   
+  // All hooks must be at the top level - no conditional hooks
+  const bgColor = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
+  const minHBg = useColorModeValue('white', 'gray.900');
+  
+  // Store hooks
   const { 
     fetchLesson, 
     fetchLessonVocabulary, 
@@ -44,6 +50,8 @@ const LessonPage = () => {
   } = useVocabularyStore();
 
   const { completeLesson } = useProgressStore();
+  
+  // State hooks
   const [lessonData, setLessonData] = useState(null);
   const [lessonProgress, setLessonProgress] = useState(0);
   const [lessonCompleted, setLessonCompleted] = useState(false);
@@ -51,46 +59,30 @@ const LessonPage = () => {
   const [lessonError, setLessonError] = useState(null);
   const [completedLastWord, setCompletedLastWord] = useState(false);
   
-  const bgColor = useColorModeValue('white', 'gray.800');
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
-  
-  useEffect(() => {
-    const loadData = async () => {
-      if (lessonId) {
-        try {
-          setLocalLoading(true);
-          const lessonData = await fetchLesson(lessonId);
-          setLessonData(lessonData?.data?.lesson || null);
-          await fetchLessonVocabulary(lessonId);
-          setCurrentVocabIndex(0);
-          setCompletedLastWord(false);
-          setLocalLoading(false);
-        } catch (err) {
-          console.error('Error loading lesson data:', err);
-          setLocalLoading(false);
-          setLessonError(err.message || 'Không thể tải bài học');
-        }
-      }
-    };
-    
-    loadData();
-  }, [lessonId, fetchLesson, fetchLessonVocabulary, setCurrentVocabIndex]);
-  
-  useEffect(() => {
-    if (lessonVocabulary && lessonVocabulary.length > 0) {
-      const progress = ((currentVocabIndex + 1) / lessonVocabulary.length) * 100;
-      setLessonProgress(progress);
-
-      if (currentVocabIndex === lessonVocabulary.length - 1) {
-        // Đã tới từ cuối
-      } else {
-        setLessonCompleted(false);
-        setCompletedLastWord(false);
-      }
+  // Memoized handlers
+  const handleBack = useCallback(() => {
+    if (lessonData && lessonData.topic_id) {
+      sessionStorage.setItem('refreshTopicData', 'true');
+      navigate(`/topics/${lessonData.topic_id}`);
+    } else {
+      navigate('/learn');
     }
-  }, [currentVocabIndex, lessonVocabulary]);
-  
-  const handleMemorized = async (vocabId) => {
+  }, [lessonData, navigate]);
+
+  const handleCompleteLesson = useCallback(async () => {
+    try {
+      await completeLesson(lessonId);
+      if (lessonData && lessonData.topic_id) {
+        navigate(`/topics/${lessonData.topic_id}`);
+      } else {
+        navigate('/learn');
+      }
+    } catch (error) {
+      console.error('Error completing lesson:', error);
+    }
+  }, [completeLesson, lessonId, lessonData, navigate]);
+
+  const handleMemorized = useCallback(async (vocabId) => {
     if (!vocabId) {
       console.error("Không tìm thấy vocab_id");
       return;
@@ -109,39 +101,59 @@ const LessonPage = () => {
     } catch (error) {
       console.error('Lỗi khi cập nhật trạng thái từ vựng:', error);
     }
-  };
-  
-  const handleSkip = () => {
+  }, [markVocabularyStatus, currentVocabIndex, lessonVocabulary, setCurrentVocabIndex]);
+
+  const handleSkip = useCallback(() => {
     if (currentVocabIndex < lessonVocabulary.length - 1) {
       setCurrentVocabIndex(currentVocabIndex + 1);
     }
-  };
+  }, [currentVocabIndex, lessonVocabulary, setCurrentVocabIndex]);
   
-  const handleCompleteLesson = async () => {
-    try {
-      const result = await completeLesson(lessonId);
-      if (lessonData && lessonData.topic_id) {
-        navigate(`/topics/${lessonData.topic_id}`);
-      } else {
-        navigate('/learn');
+  // Effects
+  useEffect(() => {
+    const loadData = async () => {
+      if (lessonId) {
+        try {
+          setLocalLoading(true);
+          setLessonError(null);
+          
+          const lessonResult = await fetchLesson(lessonId);
+          setLessonData(lessonResult?.data?.lesson || null);
+          
+          await fetchLessonVocabulary(lessonId);
+          setCurrentVocabIndex(0);
+          setCompletedLastWord(false);
+          setLessonCompleted(false);
+        } catch (err) {
+          console.error('Error loading lesson data:', err);
+          setLessonError(err.message || 'Không thể tải bài học');
+        } finally {
+          setLocalLoading(false);
+        }
       }
-    } catch (error) {
-      console.error('Error completing lesson:', error);
-    }
-  };
+    };
+    
+    loadData();
+  }, [lessonId, fetchLesson, fetchLessonVocabulary, setCurrentVocabIndex]);
   
-  const handleBack = () => {
-    if (lessonData && lessonData.topic_id) {
-      sessionStorage.setItem('refreshTopicData', 'true');
-      navigate(`/topics/${lessonData.topic_id}`);
-    } else {
-      navigate('/learn');
+  useEffect(() => {
+    if (lessonVocabulary && lessonVocabulary.length > 0) {
+      const progress = ((currentVocabIndex + 1) / lessonVocabulary.length) * 100;
+      setLessonProgress(progress);
+
+      if (currentVocabIndex !== lessonVocabulary.length - 1) {
+        setLessonCompleted(false);
+        setCompletedLastWord(false);
+      }
     }
-  };
+  }, [currentVocabIndex, lessonVocabulary]);
   
+  // Computed values
   const loading = isLoading || localLoading;
   const displayError = error || lessonError;
+  const currentVocab = lessonVocabulary && lessonVocabulary.length > 0 ? lessonVocabulary[currentVocabIndex] : null;
   
+  // Render loading state
   if (loading) {
     return (
       <Box p={4} pt="74px">
@@ -155,6 +167,7 @@ const LessonPage = () => {
     );
   }
   
+  // Render error state
   if (displayError) {
     return (
       <Box p={4} pt="74px">
@@ -172,6 +185,7 @@ const LessonPage = () => {
     );
   }
   
+  // Render empty vocabulary state
   if (!lessonVocabulary || lessonVocabulary.length === 0) {
     return (
       <Box p={4} pt="74px">
@@ -189,12 +203,12 @@ const LessonPage = () => {
     );
   }
   
-  const currentVocab = lessonVocabulary[currentVocabIndex];
-  
+  // Main render
   return (
-    <Box p={4} pt="74px" bg={useColorModeValue('white', 'gray.900')} minH="100vh">
+    <Box p={4} pt="74px" bg={minHBg} minH="100vh">
       <Container maxW="container.lg">
         <VStack spacing={6}>
+          {/* Header */}
           <Flex w="100%" align="center">
             <IconButton
               icon={<ChevronLeftIcon boxSize={6} />}
@@ -209,6 +223,7 @@ const LessonPage = () => {
             </VStack>
           </Flex>
 
+          {/* Completion Alert */}
           {lessonCompleted && completedLastWord && (
             <Alert status="success" borderRadius="md" mt={4}>
               <AlertIcon />
@@ -220,12 +235,14 @@ const LessonPage = () => {
             </Alert>
           )}
           
+          {/* Progress Info */}
           <Flex w="100%" justify="center" align="center">
             <Text fontWeight="medium">
               Từ {currentVocabIndex + 1} / {lessonVocabulary.length}
             </Text>
           </Flex>
           
+          {/* Progress Bar */}
           <Progress 
             value={lessonProgress} 
             w="100%" 
@@ -234,6 +251,7 @@ const LessonPage = () => {
             borderRadius="full" 
           />
           
+          {/* Flash Card */}
           {currentVocab && (
             <FlashCard
               vocabulary={currentVocab}

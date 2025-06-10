@@ -84,7 +84,7 @@ const UserSettingsModal = ({ isOpen, onClose }) => {
 
   const validateProfileForm = () => {
     const errors = {};
-    const isUpdate = hasProfile(); // Kiểm tra xem đã có profile chưa
+    const isUpdate = hasProfile();
     
     // Validation khác nhau cho create vs update
     if (isUpdate) {
@@ -127,10 +127,12 @@ const UserSettingsModal = ({ isOpen, onClose }) => {
       }
     }
     
+    // Validate address (giống như cũ)
     if (profileFormData.address && profileFormData.address.length > 255) {
       errors.address = 'Địa chỉ không được quá 255 ký tự';
     }
     
+    // Validate bio (giống như cũ)
     if (profileFormData.bio && profileFormData.bio.length > 500) {
       errors.bio = 'Giới thiệu bản thân không được quá 500 ký tự';
     }
@@ -178,7 +180,8 @@ const UserSettingsModal = ({ isOpen, onClose }) => {
         profile_picture: uploadedImageUrl || profile?.profile_picture || '' 
       };
       
-      await createOrUpdateProfile(submitData);
+      const result = await createOrUpdateProfile(submitData);
+      
       toast({ 
         title: 'Cập nhật thành công', 
         description: 'Thông tin cá nhân đã được cập nhật', 
@@ -190,6 +193,7 @@ const UserSettingsModal = ({ isOpen, onClose }) => {
       setIsEditingImage(false);
       setUploadedImageUrl(null);
       setProfileLoaded(false);
+      
     } catch (error) {
       toast({ 
         title: 'Lỗi khi cập nhật', 
@@ -275,7 +279,7 @@ const UserSettingsModal = ({ isOpen, onClose }) => {
                         <Text fontSize="xs" color="gray.500" mt={1}>Email không thể thay đổi</Text>
                       </FormControl>
                       <FormControl mb={4}>
-                        <FormLabel>Tên hiển thị</FormLabel>
+                        <FormLabel>Tên hiển thị (nickname)</FormLabel>
                         <Input 
                           name="display_name" 
                           value={userFormData.display_name} 
@@ -360,14 +364,12 @@ const UserSettingsModal = ({ isOpen, onClose }) => {
                       </Flex>
                       
                       <FormControl mb={3} isInvalid={validationErrors.full_name}>
-                        <FormLabel>
-                          Họ và tên 
-                        </FormLabel>
+                        <FormLabel>Họ và tên</FormLabel>
                         <Input 
                           name="full_name" 
                           value={profileFormData.full_name} 
                           onChange={handleProfileChange} 
-                          placeholder={"Nhập họ và tên ..."} 
+                          placeholder="Nhập họ và tên ..." 
                         />
                         {validationErrors.full_name && (
                           <Text color="red.500" fontSize="sm" mt={1}>{validationErrors.full_name}</Text>

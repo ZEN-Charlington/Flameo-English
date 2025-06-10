@@ -74,28 +74,43 @@ const useStudentProfileStore = create((set, get) => ({
       if (response && response.data) {
         let updatedProfile = null;
         let message = 'Cập nhật profile thành công';
+        let isComplete = false;
         
         if (response.data.status === 200 || response.data.status === 201) {
           updatedProfile = response.data.data;
           message = response.data.message || message;
+          isComplete = response.data.data?.is_complete || false;
         } else if (response.data.profile_id || response.data.user_id) {
           updatedProfile = response.data;
+          isComplete = response.data.is_complete || false;
         } else if (response.status === 200 && response.data) {
           updatedProfile = response.data;
+          isComplete = response.data.is_complete || false;
         }
         
         set({ profile: updatedProfile, isLoading: false, error: null });
-        return { success: true, message: message, data: updatedProfile };
+        return { 
+          success: true, 
+          message: message, 
+          data: updatedProfile,
+          is_complete: isComplete 
+        };
       } else {
         console.log('No response data, assuming success');
         set({ isLoading: false, error: null });
-        return { success: true, message: 'Cập nhật profile thành công', data: null };
+        return { success: true, message: 'Cập nhật profile thành công', data: null, is_complete: false };
       }
     } catch (error) {
       console.error('Error updating profile:', error);
       let errorMessage = 'Không thể cập nhật profile';
       if (error.response && error.response.data) {
-        errorMessage = error.response.data.message || errorMessage;
+        if (error.response.data.errors) {
+          // Handle validation errors from server
+          const serverErrors = Object.values(error.response.data.errors).join(', ');
+          errorMessage = `Dữ liệu không hợp lệ: ${serverErrors}`;
+        } else {
+          errorMessage = error.response.data.message || errorMessage;
+        }
         console.log('Server response:', error.response.data);
       } else if (error.message) {
         errorMessage = error.message;
@@ -111,13 +126,21 @@ const useStudentProfileStore = create((set, get) => ({
       const response = await axiosClient.put('/student-profile', profileData);
       if (response && response.data) {
         let updatedProfile = null;
+        let isComplete = false;
         if (response.data.status === 200) {
           updatedProfile = response.data.data;
+          isComplete = response.data.data?.is_complete || false;
         } else if (response.data.profile_id) {
           updatedProfile = response.data;
+          isComplete = response.data.is_complete || false;
         }
         set({ profile: updatedProfile, isLoading: false, error: null });
-        return { success: true, message: response.data.message || 'Cập nhật profile thành công', data: updatedProfile };
+        return { 
+          success: true, 
+          message: response.data.message || 'Cập nhật profile thành công', 
+          data: updatedProfile,
+          is_complete: isComplete
+        };
       } else {
         throw new Error('Không có dữ liệu trả về từ API');
       }
@@ -125,7 +148,12 @@ const useStudentProfileStore = create((set, get) => ({
       console.error('Error updating profile:', error);
       let errorMessage = 'Không thể cập nhật profile';
       if (error.response && error.response.data) {
-        errorMessage = error.response.data.message || errorMessage;
+        if (error.response.data.errors) {
+          const serverErrors = Object.values(error.response.data.errors).join(', ');
+          errorMessage = `Dữ liệu không hợp lệ: ${serverErrors}`;
+        } else {
+          errorMessage = error.response.data.message || errorMessage;
+        }
       }
       set({ error: errorMessage, isLoading: false });
       throw new Error(errorMessage);
@@ -222,21 +250,116 @@ const useStudentProfileStore = create((set, get) => ({
     }
   },
 
+  // NEW: API call để kiểm tra tính hoàn thiện từ server
+  checkProfileCompleteness: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await axiosClient.get('/student-profile-completeness');
+      if (response && response.data) {
+        const result = {
+          is_complete: response.data.is_complete || false,
+          missing_fields: response.data.missing_fields || [],
+          status: response.data.status
+        };
+        set({ isLoading: false, error: null });
+        return result;
+      } else {
+        throw new Error('Không có dữ liệu trả về từ API');
+      }
+    } catch (error) {
+      console.error('Error checking profile completeness:', error);
+      let errorMessage = 'Không thể kiểm tra tính hoàn thiện profile';
+      if (error.response && error.response.data) {
+        errorMessage = error.response.data.message || errorMessage;
+      }
+      set({ error: errorMessage, isLoading: false });
+      return { is_complete: false, missing_fields: [], error: errorMessage };
+    }
+  },
+
+  // NEW: Option 3 - Kết hợp client-side check + API verification
+  checkDiaryAccess: async () => {
+    try {
+      // Step 1: Quick client-side check for better UX
+      const quickCheck = get().hasCompleteProfile();
+      
+      if (!quickCheck) {
+        const missing = get().getMissingFields();
+        return {
+          success: false,
+          can_access_diary: false,
+          message: `Vui lòng hoàn thiện: ${missing.join(', ')}`,
+          missing_fields: missing,
+          source: 'client'
+        };
+      }
+      
+      // Step 2: API verification for accuracy
+      const serverCheck = await get().checkProfileCompleteness();
+      
+      if (serverCheck.is_complete) {
+        return {
+          success: true,
+          can_access_diary: true,
+          message: 'Profile đã hoàn thiện, có thể sử dụng sổ tay',
+          missing_fields: [],
+          source: 'server'
+        };
+      } else {
+        const missing = serverCheck.missing_fields.map(field => {
+          const fieldMap = {
+            'full_name': 'họ và tên',
+            'birth_date': 'ngày sinh',
+            'address': 'địa chỉ'
+          };
+          return fieldMap[field] || field;
+        });
+        
+        return {
+          success: false,
+          can_access_diary: false,
+          message: `Vui lòng hoàn thiện: ${missing.join(', ')}`,
+          missing_fields: missing,
+          source: 'server'
+        };
+      }
+    } catch (error) {
+      console.error('Error checking diary access:', error);
+      
+      // Fallback to client-side check if API fails
+      const clientCheck = get().hasCompleteProfile();
+      const missing = get().getMissingFields();
+      
+      return {
+        success: false,
+        can_access_diary: clientCheck,
+        message: clientCheck 
+          ? 'Không thể xác minh từ server, nhưng profile có vẻ đã hoàn thiện'
+          : `Vui lòng hoàn thiện: ${missing.join(', ')}`,
+        missing_fields: missing,
+        source: 'client_fallback',
+        error: error.message
+      };
+    }
+  },
+
   // Validation với context khác nhau cho create vs update
   validateProfileData: (data, isUpdate = false) => {
     const errors = [];
     
     // Validate full_name - Logic khác nhau cho create vs update
     if (isUpdate) {
-      // Khi update: bắt buộc phải có full_name
-      if (!data.full_name || data.full_name.trim().length === 0) {
-        errors.push('Khi cập nhật, họ và tên không được để trống');
-      } else if (data.full_name.trim().length < 2) {
-        errors.push('Họ và tên phải có ít nhất 2 ký tự');
-      } else if (data.full_name.length > 100) {
-        errors.push('Họ và tên không được quá 100 ký tự');
-      } else if (!/^[a-zA-ZÀ-ỹ\s]+$/u.test(data.full_name)) {
-        errors.push('Họ và tên chỉ được chứa chữ cái và khoảng trắng');
+      // Khi update: bắt buộc phải có full_name nếu gửi lên
+      if (data.hasOwnProperty('full_name')) {
+        if (!data.full_name || data.full_name.trim().length === 0) {
+          errors.push('Họ và tên không được để trống');
+        } else if (data.full_name.trim().length < 2) {
+          errors.push('Họ và tên phải có ít nhất 2 ký tự');
+        } else if (data.full_name.length > 100) {
+          errors.push('Họ và tên không được quá 100 ký tự');
+        } else if (!/^[a-zA-ZÀ-ỹ\s]+$/u.test(data.full_name)) {
+          errors.push('Họ và tên chỉ được chứa chữ cái và khoảng trắng');
+        }
       }
     } else {
       // Khi create: cho phép empty để tạo skeleton profile
@@ -251,8 +374,8 @@ const useStudentProfileStore = create((set, get) => ({
       }
     }
     
-    // Validate birth_date (giống như cũ)
-    if (data.birth_date) {
+    // Validate birth_date
+    if (data.hasOwnProperty('birth_date') && data.birth_date) {
       const birthDate = new Date(data.birth_date);
       const today = new Date();
       const age = today.getFullYear() - birthDate.getFullYear();
@@ -267,13 +390,13 @@ const useStudentProfileStore = create((set, get) => ({
       }
     }
     
-    // Validate address (giống như cũ)
-    if (data.address && data.address.length > 255) {
+    // Validate address
+    if (data.hasOwnProperty('address') && data.address && data.address.length > 255) {
       errors.push('Địa chỉ không được quá 255 ký tự');
     }
     
-    // Validate bio (giống như cũ)
-    if (data.bio && data.bio.length > 500) {
+    // Validate bio
+    if (data.hasOwnProperty('bio') && data.bio && data.bio.length > 500) {
       errors.push('Giới thiệu bản thân không được quá 500 ký tự');
     }
     
@@ -323,10 +446,36 @@ const useStudentProfileStore = create((set, get) => ({
     return profile && profile.profile_id;
   },
 
-  // Kiểm tra xem có thông tin đầy đủ chưa
+  // IMPROVED: Kiểm tra xem có thông tin đầy đủ chưa (client-side)
   hasCompleteProfile: () => {
     const profile = get().profile;
-    return profile && profile.profile_id && profile.full_name && profile.full_name.trim().length > 0;
+    if (!profile || !profile.profile_id) return false;
+    
+    // Kiểm tra các trường bắt buộc theo business logic mới
+    const hasFullName = profile.full_name && profile.full_name.trim().length > 0;
+    const hasBirthDate = profile.birth_date && profile.birth_date.trim().length > 0;
+    const hasAddress = profile.address && profile.address.trim().length > 0;
+    
+    return hasFullName && hasBirthDate && hasAddress;
+  },
+
+  // NEW: Lấy danh sách các trường còn thiếu (client-side)
+  getMissingFields: () => {
+    const profile = get().profile;
+    if (!profile || !profile.profile_id) return ['profile'];
+    
+    const missing = [];
+    if (!profile.full_name || profile.full_name.trim().length === 0) {
+      missing.push('họ và tên');
+    }
+    if (!profile.birth_date || profile.birth_date.trim().length === 0) {
+      missing.push('ngày sinh');
+    }
+    if (!profile.address || profile.address.trim().length === 0) {
+      missing.push('địa chỉ');
+    }
+    
+    return missing;
   },
 
   calculateAge: () => {
@@ -343,4 +492,4 @@ const useStudentProfileStore = create((set, get) => ({
   }
 }));
 
-export default useStudentProfileStore;
+export default useStudentProfileStore;  
