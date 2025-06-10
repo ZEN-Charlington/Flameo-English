@@ -10,8 +10,8 @@
         public $display_name;
         public $role;
         public $created_at;
-        public $reset_token;  // Thêm trường mới
-        public $reset_token_expiry;  // Thêm trường mới
+        public $reset_token; 
+        public $reset_token_expiry;  
 
         public function __construct($db) {
             $this->conn = $db;

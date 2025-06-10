@@ -100,7 +100,6 @@ class AuthController {
         ];
     }
 
-    // Tạo JWT Token với thời hạn 4 tiếng
     private function generateJwt($user) {
         $issuer = JWT_ISSUER;
         $audience = JWT_AUDIENCE;
@@ -119,19 +118,15 @@ class AuthController {
             ]
         ];
         
-        // Tạo header
         $header = json_encode(['typ' => 'JWT', 'alg' => 'HS256']);
         $header = base64_encode($header);
         
-        // Tạo payload
         $payload = json_encode($payload);
         $payload = base64_encode($payload);
         
-        // Tạo signature
         $signature = hash_hmac('sha256', "$header.$payload", JWT_SECRET_KEY, true);
         $signature = base64_encode($signature);
         
-        // Kết hợp tạo JWT token
         $jwt = "$header.$payload.$signature";
         
         return $jwt;

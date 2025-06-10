@@ -1,0 +1,37 @@
+# Allow access to audio files
+<Files "*.webm">
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type"
+</Files>
+
+<Files "*.mp3">
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type"
+</Files>
+
+<Files "*.wav">
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type"
+</Files>
+
+# Set proper MIME types
+AddType audio/webm .webm
+AddType audio/mpeg .mp3
+AddType audio/wav .wav
+
+# Enable compression for audio files
+<IfModule mod_deflate.c>
+    SetOutputFilter DEFLATE
+    SetEnvIfNoCase Request_URI \.(?:gif|jpe?g|png|webm|mp3|wav)$ no-gzip dont-vary
+</IfModule>
+
+# Set cache headers for audio files
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType audio/webm "access plus 1 month"
+    ExpiresByType audio/mpeg "access plus 1 month" 
+    ExpiresByType audio/wav "access plus 1 month"
+</IfModule>
